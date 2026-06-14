@@ -1,0 +1,23 @@
+{
+  "name": "telegram-notion-webhook",
+  "version": "1.0.0",
+  "description": "Telegram Notion Orchestrator V3.0 Serverless",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "gcp-build": "npm run build",
+    "start": "npx @google-cloud/functions-framework --target=helloHttp --source=dist",
+    "test": "npx ts-node localTest.ts"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.0.0",
+    "@notionhq/client": "^2.2.15",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.11.24"
+  }
+}
