@@ -1,44 +1,49 @@
-export interface TaskInput {
-  name: string;
-  status?: 'Not Started' | 'On Hold' | 'In Progress' | 'Done' | 'Archived';
-  priority: 'High' | 'Medium' | 'Low';
-  estimate: number; // in hours
-  dueDate: string;  // YYYY-MM-DD
-  projectId?: string;
-  dailyLogId?: string;
-  checklist: string[];
+export enum TaskStatus {
+  NOT_STARTED = 'Not Started',
+  ON_HOLD = 'On Hold',
+  IN_PROGRESS = 'In Progress',
+  DONE = 'Done',
+  ARCHIVED = 'Archived',
 }
 
-export interface ChecklistItem {
-  id: string;
-  text: string;
-  checked: boolean;
+export enum TaskPriority {
+  HIGH = 'High',
+  MEDIUM = 'Medium',
+  LOW = 'Low',
+}
+
+export interface TaskInput {
+  name: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  estimate?: number;
+  date?: string; // YYYY-MM-DD format
+  checklist?: string[]; // Array of subtasks/to-dos
 }
 
 export interface NotionTask {
   id: string;
   name: string;
-  status: 'Not Started' | 'On Hold' | 'In Progress' | 'Done' | 'Archived';
-  priority: 'High' | 'Medium' | 'Low';
+  status: TaskStatus;
+  priority: TaskPriority;
   estimate: number;
-  dueDate: string;
-  projectId?: string;
-  dailyLogId?: string;
-  checklist: ChecklistItem[];
+  date: string;
+  projectId: string | null;
+  dailyLogId: string | null;
 }
 
 export interface NotionProject {
   id: string;
   name: string;
   status: string;
-  areaId?: string;
+  areaId: string | null;
 }
 
 export interface NotionDailyLog {
   id: string;
-  name: string; // YYYY-MM-DD
+  name: string;
   date: string;
-  highlight?: string;
+  highlight: string;
 }
 
 export interface NotionArea {
@@ -50,5 +55,5 @@ export interface NotionResource {
   id: string;
   name: string;
   url: string;
-  areaId?: string;
+  areaId: string | null;
 }
