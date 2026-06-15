@@ -1,35 +1,19 @@
 import * as functions from '@google-cloud/functions-framework';
-import * as dotenv from 'dotenv';
+import { taskService } from './src/services/taskService';
+import { reportService } from './src/services/reportService';
+import { telegramClient } from './src/telegram/client';
+import { NotionSecondBrainClient } from './src/notion/client';
 
-// Load environment variables locally
-dotenv.config();
+const notionClient = new NotionSecondBrainClient();
 
-import { 
-  fetchProjects, 
-  addTask, 
-  fetchTodayTasks, 
-  completeTask, 
-  getTaskWithBlocks, 
-  updateTaskEstimate, 
-  cloneTaskForNextDay 
-} from './src/notionClient';
-
-import { parseTaskInput } from './src/geminiClient';
-
-import { 
-  sendMessage, 
-  editMessageText, 
-  answerCallbackQuery 
-} from './src/telegramClient';
-
-// Register HTTP function helloHttp
+// Expose helloHttp as Google Cloud Functions HTTP webhook
 functions.http('helloHttp', async (req: any, res: any) => {
   const body = req.body;
 
-  // Log incoming body for debugging
+  // Log incoming body for debug/diagnostics
   console.log('Incoming Telegram Update:', JSON.stringify(body, null, 2));
 
-  // 1. Handle Callback Queries (from inline keyboards)
+  // 1. Handle Inline Keyboards (Callback Queries)
   if (body && body.callback_query) {
     const callbackQuery = body.callback_query;
     const callbackQueryId = callbackQuery.id;
@@ -39,66 +23,43 @@ functions.http('helloHttp', async (req: any, res: any) => {
     const callbackData = callbackQuery.data;
 
     try {
-      // Answer callback query immediately to stop Telegram loading spinner
-      await answerCallbackQuery(callbackQueryId);
+      // Answer callback query immediately to dismiss loading state
+      await telegramClient.answerCallbackQuery(callbackQueryId);
 
       if (callbackData.startsWith('complete_')) {
         const taskId = callbackData.replace('complete_', '');
-        console.log(`Processing complete action for task: ${taskId}`);
+        console.log(`Callback: completing task ${taskId}`);
 
-        // Update task status in Notion
-        await completeTask(taskId);
+        // Update task Status in Notion
+        await notionClient.completeTask(taskId);
 
         // Edit original message text to show completion
         const updatedText = `✅ *Đã hoàn thành!*\n\n${originalText}`;
-        await editMessageText(chatId, messageId, updatedText, {
-          reply_markup: { inline_keyboard: [] } // remove buttons
+        await telegramClient.editMessageText(chatId, messageId, updatedText, {
+          reply_markup: { inline_keyboard: [] } // remove inline buttons
         });
 
       } else if (callbackData.startsWith('defer_')) {
         const taskId = callbackData.replace('defer_', '');
-        console.log(`Processing defer/rollover action for task: ${taskId}`);
+        console.log(`Callback: deferring task ${taskId}`);
 
-        // 1. Fetch task details and checklist blocks from Notion
-        const task = await getTaskWithBlocks(taskId);
+        // Execute task rollover logic (halve estimate, mark Done, clone for tomorrow)
+        const rollover = await taskService.deferAndRolloverTask(taskId);
 
-        // 2. Identify unchecked checklist items
-        const uncheckedItems = task.checklist.filter(item => !item.checked);
-        const checkedCount = task.checklist.length - uncheckedItems.length;
-
-        // 3. Recalculate original task's estimate (halve it)
-        const adjustedOriginalEstimate = parseFloat((task.estimate * 0.5).toFixed(2)) || 0.5;
-        await updateTaskEstimate(taskId, adjustedOriginalEstimate);
-
-        // 4. Mark original task as Done
-        await completeTask(taskId);
-
-        // 5. Clone task for the next day with unchecked items
-        await cloneTaskForNextDay(task, uncheckedItems);
-
-        // 6. Edit original message on Telegram to reflect the deferral
-        const updatedText = `⏳ *Đã hoãn & Chia nhỏ sang ngày mai*\n- Ưu lượng gốc giảm còn: ${adjustedOriginalEstimate}h\n- Tiến trình: Hoàn thành ${checkedCount}/${task.checklist.length} subtasks.\n\n${originalText}`;
-        await editMessageText(chatId, messageId, updatedText, {
+        // Update original message
+        const updatedText = `⏳ *Đã hoãn & Rollover sang ngày mai*\n- Dự lượng gốc giảm còn: ${rollover.adjustedOriginalEstimate}h\n- Tiến trình: Hoàn thành ${rollover.checkedCount} checklist items.\n\n${originalText}`;
+        await telegramClient.editMessageText(chatId, messageId, updatedText, {
           reply_markup: { inline_keyboard: [] }
         });
 
-        // 7. Send confirmation message for the rollover task
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short' });
-        
-        let rolloverMsg = `🚀 *Rollover thành công!*\nĐã chuyển ${uncheckedItems.length} việc chưa làm sang ngày ${tomorrowStr}:\n*Task:* [Rollover] ${task.name}\n*Dự lượng:* ${(task.estimate * 0.5).toFixed(2)}h`;
-        if (uncheckedItems.length > 0) {
-          rolloverMsg += `\n*Checklist chuyển đi:*\n` + uncheckedItems.map(it => `- ${it.text}`).join('\n');
-        } else {
-          rolloverMsg += `\n(Tất cả subtasks đã hoàn thành hoặc không có checklist!)`;
-        }
-        await sendMessage(chatId, rolloverMsg);
+        // Send confirmation message about tomorrow's rollover task
+        const confirmMsg = `🚀 *Rollover thành công!*\nĐã chuyển các việc chưa xong sang ngày mai (${rollover.tomorrowStr}):\n*Task:* [Rollover] ${rollover.originalTask.name}\n*Dự lượng:* ${rollover.adjustedOriginalEstimate}h\n*Checklist chuyển đi:* ${rollover.uncheckedCount} items dở dang.`;
+        await telegramClient.sendMessage(chatId, confirmMsg);
       }
 
     } catch (error: any) {
       console.error('Error handling callback query:', error);
-      await sendMessage(chatId, `❌ Có lỗi xảy ra khi xử lý nút bấm: ${error.message}`);
+      await telegramClient.sendMessage(chatId, `❌ Có lỗi xảy ra khi xử lý nút bấm: ${error.message}`);
     }
 
     return res.status(200).send('OK');
@@ -108,102 +69,202 @@ functions.http('helloHttp', async (req: any, res: any) => {
   if (body && body.message) {
     const message = body.message;
     const chatId = message.chat.id;
-    const text = message.text || '';
+    const text = (message.text || '').trim();
 
-    // Ignore non-text messages
     if (!text) {
       return res.status(200).send('OK');
     }
 
     try {
+      // Command /start
       if (text.startsWith('/start')) {
-        const welcomeMessage = `Chào Sếp! Hệ thống TypeScript V3.0 Serverless đã thông suốt tại Singapore. 🇸🇬\n\nTôi là Liam, trợ lý hiệu suất tối cao của Sếp.\n\n*Các lệnh hỗ trợ:*\n- Nhập văn bản trực tiếp hoặc dùng lệnh \`/add_task <nội dung>\` để thêm task thông minh bằng AI.\n- Dùng lệnh \`/view_task\` hoặc \`/tasks\` để xem các task hôm nay và thực hiện thao tác nhanh.`;
-        await sendMessage(chatId, welcomeMessage);
+        const welcome = `Chào Sếp! Tôi là Liam, trợ lý hiệu suất tối cao Second Brain của Sếp. 🧠
 
-      } else if (text.startsWith('/view_task') || text.startsWith('/tasks')) {
+*Các lệnh được hỗ trợ:*
+- Nhập text tự nhiên để *tạo task mới* (Ví dụ: \`Thiết kế UI mới cho dự án PRJ226 ngày mai, độ ưu tiên High, 2h\`).
+- Gửi một đường link (URL) để *lưu trữ tài nguyên* (Ví dụ: \`https://example.com/notion-guide Tài liệu Notion API mới của Area Tech\`).
+- \`/view_task\` hoặc \`/tasks\`: Xem danh sách task chưa hoàn thành hôm nay.
+- \`/rescue\`: Gọi công cụ giải cứu sự trì hoãn (tìm task quan trọng và dễ làm nhất).
+- \`/highlight <nội dung>\`: Nhập thành tựu/ghi chép ngày hôm nay (tự dịch sang tiếng Anh lưu Daily Log).
+- \`/weekly_report\` hoặc \`/retro\`: Xem báo cáo hiệu suất tuần (Slippage Rate, Velocity, PM framework).`;
+        await telegramClient.sendMessage(chatId, welcome);
+        return res.status(200).send('OK');
+      }
+
+      // Command /view_task or /tasks
+      if (text.startsWith('/view_task') || text.startsWith('/tasks')) {
         console.log('Fetching today\'s tasks...');
-        const tasks = await fetchTodayTasks();
+        const tasks = await notionClient.fetchTodayTasks();
 
         if (tasks.length === 0) {
-          await sendMessage(chatId, `🎉 Hôm nay Sếp không còn task nào chưa hoàn thành! Tuyệt vời!`);
+          await telegramClient.sendMessage(chatId, `🎉 Hôm nay Sếp không còn task nào chưa hoàn thành! Tuyệt vời!`);
         } else {
-          await sendMessage(chatId, `📋 *Danh sách task chưa hoàn thành hôm nay:*`);
+          await telegramClient.sendMessage(chatId, `📋 *Danh sách task chưa hoàn thành hôm nay:*`);
           for (const task of tasks) {
-            const taskMsg = `*Task:* ${task.name}\n*Độ ưu tiên:* ${task.priority}\n*Dự lượng:* ${task.estimate}h\n*Ngày:* ${task.date}`;
+            // Fetch project progress metrics if linked
+            let projectInfo = 'Không có';
+            if (task.projectId) {
+              const proj = await notionClient.fetchActiveProjects();
+              const matchedProj = proj.find(p => p.id === task.projectId);
+              if (matchedProj) {
+                const progress = await notionClient.fetchProjectTasksProgress(task.projectId);
+                const progressPercent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+                projectInfo = `${matchedProj.name} (Tiến độ: ${progressPercent}%)`;
+              }
+            }
+
+            const taskMsg = `*Nhiệm vụ:* ${task.name}\n*Dự án:* ${projectInfo}\n*Độ ưu tiên:* ${task.priority}\n*Dự lượng:* ${task.estimate}h\n*Hạn chót:* ${task.dueDate}`;
             
-            // Inline Keyboard buttons
-            const replyMarkup = {
-              inline_keyboard: [
-                [
-                  { text: '✅ Complete', callback_data: `complete_${task.id}` },
-                  { text: '⏳ Defer', callback_data: `defer_${task.id}` }
+            const inlineKeyboard = {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Complete', callback_data: `complete_${task.id}` },
+                    { text: '⏳ Defer', callback_data: `defer_${task.id}` }
+                  ]
                 ]
-              ]
+              }
             };
 
-            await sendMessage(chatId, taskMsg, { reply_markup: replyMarkup });
+            await telegramClient.sendMessage(chatId, taskMsg, inlineKeyboard);
           }
         }
+        return res.status(200).send('OK');
+      }
 
-      } else {
-        // Treat as task creation command (either starting with /add_task or raw natural language text)
-        let taskDescription = text;
-        if (text.startsWith('/add_task')) {
-          taskDescription = text.replace('/add_task', '').trim();
+      // Command /rescue (Focus Rescue Engine)
+      if (text.startsWith('/rescue')) {
+        console.log('Running rescue engine...');
+        const recommendedTask = await taskService.rescueTask();
+
+        if (!recommendedTask) {
+          await telegramClient.sendMessage(
+            chatId,
+            `💡 Không tìm thấy task quan trọng (High Priority) có thời lượng ngắn (≤ 30 phút) nào trong hôm nay. Sếp hãy chọn các task khác trong danh sách \`/view_task\` nhé!`
+          );
+        } else {
+          const rescueMsg = `⚡ *FOCUS RESCUE ENGINE (CỨU VÃN TẬP TRUNG)* ⚡
+Liam khuyên Sếp làm ngay task này để vượt qua sự trì hoãn:
+
+*Nhiệm vụ:* ${recommendedTask.name}
+*Độ ưu tiên:* ${recommendedTask.priority}
+*Dự lượng:* ${recommendedTask.estimate}h (≤ 30 phút)
+
+👉 Hãy bắt đầu ngay 25 phút Pomodoro tập trung cao độ, tắt hết thông báo đi nào Sếp!`;
+          
+          const inlineKeyboard = {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ Complete', callback_data: `complete_${recommendedTask.id}` },
+                  { text: '⏳ Defer', callback_data: `defer_${recommendedTask.id}` }
+                ]
+              ]
+            }
+          };
+
+          await telegramClient.sendMessage(chatId, rescueMsg, inlineKeyboard);
         }
+        return res.status(200).send('OK');
+      }
 
-        if (!taskDescription) {
-          await sendMessage(chatId, `⚠️ Sếp vui lòng nhập nội dung công việc. Ví dụ: \`/add_task Thiết kế UI mới, độ ưu tiên cao, dự kiến 2h\``);
+      // Command /weekly_report or /retro
+      if (text.startsWith('/weekly_report') || text.startsWith('/retro')) {
+        console.log('Compiling weekly retro report...');
+        const waitMsgResponse = await telegramClient.sendMessage(chatId, `🤖 _Liam đang tổng hợp chỉ số hiệu suất tuần và phân tích PM framework..._`);
+        const waitMessageId = waitMsgResponse?.result?.message_id;
+
+        const reportMsg = await reportService.getWeeklyReportMessage();
+
+        if (waitMessageId) {
+          await telegramClient.editMessageText(chatId, waitMessageId, reportMsg);
+        } else {
+          await telegramClient.sendMessage(chatId, reportMsg);
+        }
+        return res.status(200).send('OK');
+      }
+
+      // Command /highlight <content>
+      if (text.startsWith('/highlight')) {
+        const highlightText = text.replace('/highlight', '').trim();
+        if (!highlightText) {
+          await telegramClient.sendMessage(chatId, `⚠️ Vui lòng nhập nội dung highlight sau lệnh. Ví dụ: \`/highlight Đóng gói thành công tính năng chatbot\``);
           return res.status(200).send('OK');
         }
 
-        // Inform user that Liam is parsing
-        const waitMsgResponse = await sendMessage(chatId, `🤖 _Liam đang phân tích yêu cầu và đồng bộ Notion..._`);
+        const waitMsgResponse = await telegramClient.sendMessage(chatId, `🤖 _Liam đang biên dịch sang tiếng Anh và đồng bộ Daily Log..._`);
         const waitMessageId = waitMsgResponse?.result?.message_id;
 
-        // Fetch active projects to context-match
-        console.log('Fetching active projects...');
-        const projects = await fetchProjects();
+        const translated = await taskService.addDailyHighlight(highlightText);
+        const confirmMsg = `✍️ *Đã ghi nhận highlight hôm nay vào Daily Log:*
+- Tiếng Việt: "${highlightText}"
+- Tiếng Anh (Lưu Notion): "${translated}"`;
 
-        // Run Gemini parsing
-        console.log('Parsing with Gemini...');
-        const parsedTask = await parseTaskInput(taskDescription, projects);
-        console.log('Gemini Parsed Task Output:', JSON.stringify(parsedTask, null, 2));
-
-        // Create page in Notion Tasks DB
-        console.log('Adding task to Notion...');
-        await addTask({
-          name: parsedTask.name,
-          priority: parsedTask.priority,
-          estimate: parsedTask.estimate,
-          dueDate: parsedTask.dueDate,
-          projectId: parsedTask.projectId,
-          checklist: parsedTask.checklist
-        });
-
-        // Find project name if matched
-        const matchedProject = projects.find(p => p.id === parsedTask.projectId);
-        const projectName = matchedProject ? matchedProject.name : 'Không có';
-
-        // Prepare success text
-        const successText = `🎯 *Đã tạo task thành công trên Notion!*\n\n*Task:* ${parsedTask.name}\n*Dự án:* ${projectName}\n*Độ ưu tiên:* ${parsedTask.priority}\n*Dự lượng:* ${parsedTask.estimate}h\n*Hạn chót:* ${parsedTask.dueDate}\n\n*Checklist đã tạo:*\n` + 
-          parsedTask.checklist.map(item => `- [ ] ${item}`).join('\n');
-
-        // Delete the loading message or edit it
         if (waitMessageId) {
-          await editMessageText(chatId, waitMessageId, successText);
+          await telegramClient.editMessageText(chatId, waitMessageId, confirmMsg);
         } else {
-          await sendMessage(chatId, successText);
+          await telegramClient.sendMessage(chatId, confirmMsg);
         }
+        return res.status(200).send('OK');
       }
+
+      // 3. Handle Resource capturing (if message contains http/https link)
+      const urlRegex = /(https?:\/\/[^\s]+)/gi;
+      const urlMatches = text.match(urlRegex);
+      
+      if (urlMatches) {
+        const url = urlMatches[0];
+        console.log(`Detected URL: ${url}. Saving as resource...`);
+
+        const waitMsgResponse = await telegramClient.sendMessage(chatId, `🤖 _Liam đang phân tích và sắp xếp tài liệu vào Resources theo Area..._`);
+        const waitMessageId = waitMsgResponse?.result?.message_id;
+
+        const resource = await taskService.saveResource(url, text);
+        const resourceMsg = `📚 *Đã lưu tài nguyên tham khảo mới:*
+- *Tên tài liệu:* ${resource.title}
+- *Đường dẫn:* [Liên kết](${resource.url})
+- *Phân loại (Area):* ${resource.areaName}`;
+
+        if (waitMessageId) {
+          await telegramClient.editMessageText(chatId, waitMessageId, resourceMsg, { disable_web_page_preview: true });
+        } else {
+          await telegramClient.sendMessage(chatId, resourceMsg, { disable_web_page_preview: true });
+        }
+        return res.status(200).send('OK');
+      }
+
+      // 4. Handle Raw Task text command
+      console.log(`Processing raw text task creation: "${text}"`);
+      const waitMsgResponse = await telegramClient.sendMessage(chatId, `🤖 _Liam đang phân tích yêu cầu công việc và lập checklist đồng bộ Notion..._`);
+      const waitMessageId = waitMsgResponse?.result?.message_id;
+
+      const task = await taskService.createTaskFromNaturalLanguage(text);
+
+      const successMsg = `🎯 *Đã tạo task thành công trên Notion!*
+
+*Nhiệm vụ:* ${task.taskName}
+*Dự án:* ${task.projectName}
+*Hạn chót:* ${task.dueDate}
+*Độ ưu tiên:* ${task.priority}
+*Dự lượng:* ${task.estimate}h
+
+*Checklist hành động đã nạp:*
+${task.checklistText}`;
+
+      if (waitMessageId) {
+        await telegramClient.editMessageText(chatId, waitMessageId, successMsg);
+      } else {
+        await telegramClient.sendMessage(chatId, successMsg);
+      }
+
     } catch (error: any) {
-      console.error('Error handling message:', error);
-      await sendMessage(chatId, `❌ Đã xảy ra lỗi: ${error.message}`);
+      console.error('Error handling message update:', error);
+      await telegramClient.sendMessage(chatId, `❌ Có lỗi xảy ra: ${error.message}`);
     }
 
     return res.status(200).send('OK');
   }
 
-  // Fallback for other update types
+  // Fallback response for other webhook updates (e.g. edited_message, poll, etc.)
   res.status(200).send('OK');
 });
