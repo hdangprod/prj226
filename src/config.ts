@@ -1,22 +1,42 @@
 import * as dotenv from 'dotenv';
-
 dotenv.config();
 
-function getEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing environment variable: ${key}`);
+const REQUIRED_ENV_VARS = [
+  'TELEGRAM_BOT_TOKEN',
+  'NOTION_API_KEY',
+  'NOTION_TASKS_DB_ID',
+  'NOTION_PROJECTS_DB_ID',
+  'NOTION_AREAS_DB_ID',
+  'NOTION_RESOURCES_DB_ID',
+  'NOTION_DAILY_LOGS_DB_ID',
+  'GEMINI_API_KEY',
+] as const;
+
+type EnvKey = typeof REQUIRED_ENV_VARS[number];
+
+function validateEnv(): Record<EnvKey, string> {
+  const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    throw new Error(
+      `[Config] Missing required environment variables: ${missing.join(', ')}\n` +
+      `Please copy .env.example to .env and fill in all values.`
+    );
   }
-  return value;
+  return Object.fromEntries(
+    REQUIRED_ENV_VARS.map((key) => [key, process.env[key] as string])
+  ) as Record<EnvKey, string>;
 }
 
-export const config = {
-  NOTION_TOKEN: getEnv('NOTION_TOKEN'),
-  TELEGRAM_BOT_TOKEN: getEnv('TELEGRAM_BOT_TOKEN'),
-  GEMINI_API_KEY: getEnv('GEMINI_API_KEY'),
-  NOTION_DB_TASKS: getEnv('TASKS_DB_ID'),
-  NOTION_DB_PROJECTS: getEnv('PROJECTS_DB_ID'),
-  NOTION_DB_DAILY_LOGS: getEnv('DAILY_LOGS_DB_ID'),
-  NOTION_DB_AREAS: getEnv('AREAS_DB_ID'),
-  NOTION_DB_RESOURCES: getEnv('RESOURCES_DB_ID'),
-};
+export const config = validateEnv();
+
+/**
+ * Centralized Gemini model tiers.
+ * Model names change over time, so they are env-driven and must NOT be hardcoded
+ * elsewhere in the codebase. Defaults point to real, currently-available models.
+ *   - LITE: high-frequency, deterministic NLP (parsing, translation, filtering)
+ *   - PRO:  low-frequency, complex reasoning (bulk planning, retrospective)
+ */
+export const MODELS = {
+  LITE: process.env.GEMINI_MODEL_LITE || 'gemini-1.5-flash',
+  PRO: process.env.GEMINI_MODEL_PRO || 'gemini-1.5-pro',
+} as const;

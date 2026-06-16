@@ -1,108 +1,79 @@
 import { config } from '../config';
 
-const BASE_URL = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}`;
+const TELEGRAM_API_URL = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}`;
 
-export class TelegramClient {
-  /**
-   * Sends a message to a specific Telegram chat.
-   */
-  public async sendMessage(
-    chatId: number | string,
-    text: string,
-    options: Record<string, any> = {}
-  ): Promise<any> {
-    const url = `${BASE_URL}/sendMessage`;
-    const payload = {
-      chat_id: chatId,
-      text: text,
-      parse_mode: 'Markdown',
-      ...options
-    };
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error(`Telegram sendMessage failed with status ${res.status}:`, JSON.stringify(data));
-      }
-      return data;
-    } catch (error) {
-      console.error('Error in TelegramClient sendMessage:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Edits the text of an existing Telegram message.
-   */
-  public async editMessageText(
-    chatId: number | string,
-    messageId: number,
-    text: string,
-    options: Record<string, any> = {}
-  ): Promise<any> {
-    const url = `${BASE_URL}/editMessageText`;
-    const payload = {
-      chat_id: chatId,
-      message_id: messageId,
-      text: text,
-      parse_mode: 'Markdown',
-      ...options
-    };
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error(`Telegram editMessageText failed with status ${res.status}:`, JSON.stringify(data));
-      }
-      return data;
-    } catch (error) {
-      console.error('Error in TelegramClient editMessageText:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Answers a callback query from an inline keyboard button click.
-   */
-  public async answerCallbackQuery(
-    callbackQueryId: string,
-    text: string = ''
-  ): Promise<any> {
-    const url = `${BASE_URL}/answerCallbackQuery`;
-    const payload = {
-      callback_query_id: callbackQueryId,
-      text: text
-    };
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error(`Telegram answerCallbackQuery failed with status ${res.status}:`, JSON.stringify(data));
-      }
-      return data;
-    } catch (error) {
-      console.error('Error in TelegramClient answerCallbackQuery:', error);
-      throw error;
-    }
-  }
+interface SendMessagePayload {
+  chat_id: number | string;
+  text: string;
+  parse_mode?: string;
+  reply_markup?: any;
 }
 
-export const telegramClient = new TelegramClient();
+export async function sendMessage(chatId: number | string, text: string, replyMarkup?: any): Promise<any> {
+  const payload: SendMessagePayload = {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'Markdown',
+  };
+
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
+
+  const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[Telegram] Failed to send message:', errorText);
+  }
+
+  return response.json();
+}
+
+export async function editMessageText(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  replyMarkup?: any
+): Promise<any> {
+  const payload: any = {
+    chat_id: chatId,
+    message_id: messageId,
+    text: text,
+    parse_mode: 'Markdown',
+  };
+
+  if (replyMarkup !== undefined) {
+    payload.reply_markup = replyMarkup;
+  }
+
+  const response = await fetch(`${TELEGRAM_API_URL}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
+}
+
+export async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<any> {
+  const payload: any = {
+    callback_query_id: callbackQueryId,
+  };
+
+  if (text) {
+    payload.text = text;
+  }
+
+  const response = await fetch(`${TELEGRAM_API_URL}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
+}

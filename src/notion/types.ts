@@ -1,59 +1,41 @@
-export enum TaskStatus {
-  NOT_STARTED = 'Not Started',
-  ON_HOLD = 'On Hold',
-  IN_PROGRESS = 'In Progress',
-  DONE = 'Done',
-  ARCHIVED = 'Archived',
-}
-
-export enum TaskPriority {
-  HIGH = 'High',
-  MEDIUM = 'Medium',
-  LOW = 'Low',
-}
-
 export interface TaskInput {
   name: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  estimate?: number;
-  date?: string; // YYYY-MM-DD format
-  checklist?: string[]; // Array of subtasks/to-dos
-}
-
-export interface NotionTask {
-  id: string;
-  name: string;
-  status: TaskStatus;
-  priority: TaskPriority;
+  projectName?: string;
+  priority: 'High' | 'Medium' | 'Low';
   estimate: number;
-  date: string;
-  projectId: string | null;
-  dailyLogId: string | null;
+  dueDate: string;
+  checklist: string[];
 }
 
-export interface NotionProject {
+export interface TaskPage {
   id: string;
   name: string;
   status: string;
-  areaId: string | null;
+  priority: 'High' | 'Medium' | 'Low';
+  estimate: number;
+  dueDate: string;
+  projectId?: string;
+  dailyLogId?: string;
+  checklistBlocks: ChecklistBlock[];
 }
 
-export interface NotionDailyLog {
+export interface ChecklistBlock {
   id: string;
-  name: string;
-  date: string;
-  highlight: string;
+  text: string;
+  checked: boolean;
 }
 
-export interface NotionArea {
+export interface DailyLogPage {
   id: string;
-  name: string;
+  title: string;
+  highlight?: string;
 }
 
-export interface NotionResource {
-  id: string;
+export interface GeminiTaskOutput {
   name: string;
-  url: string;
-  areaId: string | null;
+  projectName?: string;
+  priority: 'High' | 'Medium' | 'Low';
+  estimate: number;
+  dueDate: string;
+  checklist: string[];
 }

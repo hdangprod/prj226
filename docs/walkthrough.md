@@ -1,1 +1,0 @@
-/Users/dangnguyen/.gemini/antigravity-ide/brain/a891b058-af1d-4855-8228-b79a9cd14e8b/walkthrough.md

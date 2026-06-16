@@ -1,19 +1,20 @@
 {
-  "name": "telegram-notion-webhook",
+  "name": "telegram-notion-second-brain",
   "version": "1.0.0",
-  "description": "Telegram Notion Orchestrator V3.0 Serverless",
+  "description": "Serverless Telegram Bot orchestrating a Notion Second Brain via Gemini AI",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "gcp-build": "npm run build",
     "start": "npx @google-cloud/functions-framework --target=helloHttp --source=dist",
-    "test": "npx ts-node localTest.ts"
+    "test": "npx ts-node tests/localTest.ts",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "deploy": "npm run build && gcloud functions deploy telegram-notion-bot --entry-point helloHttp --runtime nodejs20 --trigger-http --allow-unauthenticated"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.0.0",
+    "@google-cloud/functions-framework": "^3.5.1",
     "@google/generative-ai": "^0.21.0",
-    "@notionhq/client": "^2.3.0",
-    "dotenv": "^16.6.1"
+    "@notionhq/client": "^2.2.15",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
