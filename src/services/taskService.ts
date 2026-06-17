@@ -1,94 +1,101 @@
 import { parseTaskInput, parseWeeklyPlan, translateHighlight } from '../gemini/client';
-import { 
-  createTask, 
-  findProjectByName, 
+import {
+  createTask,
+  findProjectByName,
   getOrCreateDailyLog,
   getTaskPage,
-  getTaskChecklist,
   updateTaskStatus,
   updateTaskEstimate,
+  queryTasksByDate,
   queryRescueCandidates,
-  updateDailyLogHighlight
+  queryTasksByProject,
+  updateDailyLogHighlight,
+  countTasksInProject,
 } from '../notion/client';
+import type { TaskInput, TaskPage, GeminiTaskOutput } from '../notion/types';
 
-/**
- * Handle /add_task logic
- */
-export async function processSingleTask(text: string): Promise<string> {
-  const currentDate = new Date().toISOString().split('T')[0];
-  
-  // 1. Parse text using Gemini
-  const parsedTask = await parseTaskInput(text, currentDate);
+// ─── Helpers ───
 
-  // 2. Find project ID if project name is mentioned
+function notionDeepLink(pageId: string): string {
+  return `notion://notion.so/${pageId.replace(/-/g, '')}`;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ─── FR-1: Add Task ───
+
+export async function addTaskFromText(
+  text: string,
+  today: string,
+  _chatId?: number,
+  dailyLogId?: string
+): Promise<string> {
+  const parsed = await parseTaskInput(text, today);
+
   let projectId: string | undefined;
-  if (parsedTask.projectName) {
-    const project = await findProjectByName(parsedTask.projectName);
-    if (project) {
-      projectId = project.id;
+  if (parsed.projectName) {
+    const project = await findProjectByName(parsed.projectName);
+    if (project) projectId = project.id;
+  }
+
+  const logId = dailyLogId ?? (await getOrCreateDailyLog(today)).id;
+
+  const taskId = await createTask(parsed, projectId, logId);
+  return taskId;
+}
+
+// ─── FR-2: View Today Tasks ───
+
+export async function viewTodayTasks(today: string): Promise<string> {
+  const tasks = await queryTasksByDate(today);
+
+  if (tasks.length === 0) {
+    return '🎉 Hôm nay không còn task nào chưa hoàn thành!';
+  }
+
+  const lines: string[] = ['📋 *Danh sách task hôm nay:*\n'];
+  for (const t of tasks) {
+    let projectInfo = 'Không có';
+    if (t.projectId) {
+      const progress = await queryTasksByProject(t.projectId);
+      const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+      projectInfo = `(Tiến độ: ${pct}%)`;
     }
+    lines.push(
+      `• *${t.name}*\n  Priority: ${t.priority} | Est: ${t.estimate}h | Project: ${projectInfo}`
+    );
   }
-
-  // 3. Get or create Daily Log for today
-  const dailyLog = await getOrCreateDailyLog(currentDate);
-
-  // 4. Create Task in Notion
-  const taskId = await createTask(
-    parsedTask,
-    projectId,
-    dailyLog.id
-  );
-
-  return `Successfully created task: *${parsedTask.name}*\nProject: ${parsedTask.projectName || 'None'}\nPriority: ${parsedTask.priority}\nEstimate: ${parsedTask.estimate}h\n[View in Notion](https://notion.so/${taskId.replace(/-/g, '')})`;
+  return lines.join('\n');
 }
 
 /**
- * Handle /rescue logic
+ * Returns today's tasks as structured data (for inline keyboard rendering).
  */
-export async function getRescueTask(): Promise<string> {
-  const candidates = await queryRescueCandidates();
-  if (candidates.length === 0) {
-    return 'No rescue tasks found! Great job keeping your high-priority short tasks clear.';
-  }
-
-  const task = candidates[0];
-  return `🚨 *Focus Rescue Task* 🚨\n\n*${task.name}*\nPriority: High\nEstimate: ${task.estimate}h\n[View in Notion](https://notion.so/${task.id.replace(/-/g, '')})\n\nDo this right now to gain momentum!`;
+export async function getTodayTaskPages(today: string): Promise<TaskPage[]> {
+  return queryTasksByDate(today);
 }
 
-/**
- * Handle /highlight logic
- */
-export async function processHighlight(text: string): Promise<string> {
-  const currentDate = new Date().toISOString().split('T')[0];
-  const translated = await translateHighlight(text);
-  
-  const dailyLog = await getOrCreateDailyLog(currentDate);
-  await updateDailyLogHighlight(dailyLog.id, translated);
+// ─── FR-3: Complete Task ───
 
-  return `Highlight updated successfully for today!\n*English Translation:* ${translated}`;
-}
-
-/**
- * Handle rollover (Defer) logic
- */
-export async function deferTask(taskId: string): Promise<string> {
-  const task = await getTaskPage(taskId);
-  
-  // Cut estimate in half (earned value)
-  const newEstimate = task.estimate / 2;
-  await updateTaskEstimate(taskId, newEstimate);
-  
-  // Mark old task as done
+export async function completeTask(taskId: string): Promise<void> {
   await updateTaskStatus(taskId, 'Done');
+}
 
-  // Clone a new task for tomorrow with unchecked items
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-  
-  const uncheckedItems = task.checklistBlocks.filter(b => !b.checked).map(b => b.text);
+// ─── FR-3: Defer / Rollover ───
 
-  const newTaskInput = {
+export async function rolloverTask(
+  task: TaskPage,
+  tomorrowStr: string
+): Promise<string> {
+  const newEstimate = task.estimate / 2;
+  await updateTaskEstimate(task.id, newEstimate);
+  await updateTaskStatus(task.id, 'Done');
+
+  const uncheckedItems = task.checklistBlocks.filter((b) => !b.checked).map((b) => b.text);
+
+  const newTaskInput: TaskInput = {
     name: `[Rollover] ${task.name}`,
     priority: task.priority,
     estimate: newEstimate,
@@ -97,35 +104,75 @@ export async function deferTask(taskId: string): Promise<string> {
   };
 
   const dailyLog = await getOrCreateDailyLog(tomorrowStr);
-
-  await createTask(newTaskInput, task.projectId, dailyLog.id);
-
-  return `Task deferred! Half the estimate was logged as completed today, and the rest rolled over to tomorrow.`;
+  const newId = await createTask(newTaskInput, task.projectId, dailyLog.id);
+  return newId;
 }
 
-/**
- * Handle /plan_week logic (Preview phase)
- */
-export async function processWeeklyPlanPreview(text: string): Promise<any[]> {
-  const currentDate = new Date().toISOString().split('T')[0];
-  const parsedTasks = await parseWeeklyPlan(text, currentDate);
-  // Return parsed tasks so index.ts can format them and ask for confirmation
-  return parsedTasks;
+export async function getTaskById(taskId: string): Promise<TaskPage> {
+  return getTaskPage(taskId);
 }
 
-/**
- * Handle bulk creation confirmation
- */
-export async function bulkCreateTasks(tasks: any[]): Promise<string> {
-  let createdCount = 0;
-  for (const t of tasks) {
+// ─── FR-4: Rescue ───
+
+export async function rescueTask(): Promise<TaskPage | null> {
+  const candidates = await queryRescueCandidates();
+  return candidates.length > 0 ? candidates[0] : null;
+}
+
+// ─── FR-7: Plan Week Draft ───
+
+export interface PlannedTask {
+  task: GeminiTaskOutput;
+  projectId?: string;
+  prefixedName: string;
+}
+
+export async function planWeekDraft(
+  text: string,
+  today: string
+): Promise<PlannedTask[]> {
+  const parsed = await parseWeeklyPlan(text, today);
+  const result: PlannedTask[] = [];
+
+  for (const t of parsed) {
     let projectId: string | undefined;
+    let prefix = '';
     if (t.projectName) {
       const project = await findProjectByName(t.projectName);
-      if (project) projectId = project.id;
+      if (project) {
+        projectId = project.id;
+        const count = await countTasksInProject(project.id);
+        prefix = `${t.projectName}_T${count + result.filter((r) => r.projectId === project.id).length + 1}: `;
+      }
     }
-    await createTask(t, projectId);
-    createdCount++;
+    result.push({
+      task: t,
+      projectId,
+      prefixedName: `${prefix}${t.name}`,
+    });
   }
-  return `Successfully bulk-created ${createdCount} tasks!`;
+  return result;
+}
+
+// ─── FR-7: Bulk Create ───
+
+export interface BulkCreateResult {
+  createdCount: number;
+  taskIds: string[];
+}
+
+export async function bulkCreateTasks(
+  drafts: PlannedTask[],
+  dailyLogId?: string
+): Promise<BulkCreateResult> {
+  const taskIds: string[] = [];
+  for (const d of drafts) {
+    const id = await createTask(d.task, d.projectId, dailyLogId);
+    taskIds.push(id);
+    // Throttle 350ms between API calls to avoid Notion rate limits (HTTP 429)
+    if (drafts.indexOf(d) < drafts.length - 1) {
+      await delay(350);
+    }
+  }
+  return { createdCount: taskIds.length, taskIds };
 }

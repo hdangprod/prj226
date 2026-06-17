@@ -1,5 +1,6 @@
 export interface TaskInput {
   name: string;
+  description?: string;
   projectName?: string;
   priority: 'High' | 'Medium' | 'Low';
   estimate: number;
@@ -33,6 +34,7 @@ export interface DailyLogPage {
 
 export interface GeminiTaskOutput {
   name: string;
+  description?: string;
   projectName?: string;
   priority: 'High' | 'Medium' | 'Low';
   estimate: number;

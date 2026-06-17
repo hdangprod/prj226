@@ -11,6 +11,7 @@
     "deploy": "npm run build && gcloud functions deploy telegram-notion-bot --entry-point helloHttp --runtime nodejs20 --trigger-http --allow-unauthenticated"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^8.6.0",
     "@google-cloud/functions-framework": "^3.5.1",
     "@google/generative-ai": "^0.21.0",
     "@notionhq/client": "^2.2.15",

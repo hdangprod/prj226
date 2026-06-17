@@ -58,20 +58,43 @@ export async function createTask(
 
   const page = await notion.pages.create({
     parent: { database_id: config.NOTION_TASKS_DB_ID },
-    properties,
+    properties: properties as any,
   });
 
+  // Build page body children: callout (description) first, then checklist
+  const children: any[] = [];
+
+  // Callout block with context description (💡 gray_background)
+  if (task.description) {
+    children.push({
+      object: 'block',
+      type: 'callout',
+      callout: {
+        icon: { type: 'emoji', emoji: '💡' },
+        color: 'gray_background',
+        rich_text: [{ type: 'text', text: { content: task.description } }],
+      },
+    });
+  }
+
+  // Checklist to_do blocks
   if (task.checklist.length > 0) {
-    await notion.blocks.children.append({
-      block_id: page.id,
-      children: task.checklist.map((item) => ({
-        object: 'block' as const,
-        type: 'to_do' as const,
+    for (const item of task.checklist) {
+      children.push({
+        object: 'block',
+        type: 'to_do',
         to_do: {
-          rich_text: [{ type: 'text' as const, text: { content: item } }],
+          rich_text: [{ type: 'text', text: { content: item } }],
           checked: false,
         },
-      })),
+      });
+    }
+  }
+
+  if (children.length > 0) {
+    await notion.blocks.children.append({
+      block_id: page.id,
+      children,
     });
   }
 

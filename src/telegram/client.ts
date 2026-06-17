@@ -2,18 +2,30 @@ import { config } from '../config';
 
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}`;
 
-interface SendMessagePayload {
-  chat_id: number | string;
-  text: string;
-  parse_mode?: string;
-  reply_markup?: any;
+export interface InlineKeyboardMarkup {
+  inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>>;
 }
 
-export async function sendMessage(chatId: number | string, text: string, replyMarkup?: any): Promise<any> {
-  const payload: SendMessagePayload = {
+/**
+ * Escape special characters for Telegram HTML parse mode.
+ * Characters that must be escaped: & < >
+ */
+export function escapeMarkdown(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export async function sendMessage(
+  chatId: number | string,
+  text: string,
+  replyMarkup?: InlineKeyboardMarkup
+): Promise<any> {
+  const payload: any = {
     chat_id: chatId,
     text: text,
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
   };
 
   if (replyMarkup) {
@@ -38,13 +50,13 @@ export async function editMessageText(
   chatId: number | string,
   messageId: number,
   text: string,
-  replyMarkup?: any
+  replyMarkup?: InlineKeyboardMarkup
 ): Promise<any> {
   const payload: any = {
     chat_id: chatId,
     message_id: messageId,
     text: text,
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
   };
 
   if (replyMarkup !== undefined) {

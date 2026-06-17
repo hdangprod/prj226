@@ -9,6 +9,7 @@ Create a serverless Telegram Bot written in TypeScript, integrated with the Gemi
 - **Execution Environment**: GCP Functions Framework (v3.0.0) for HTTP Serverless webhook
 - **Notion SDK**: `@notionhq/client` (v2.2.15)
 - **Generative AI SDK**: `@google/generative-ai` (v0.21.0)
+- **State Management**: `@google-cloud/firestore` (for serverless persistence)
 - **Environment Management**: `dotenv` (v16.4.5)
 - **Development Tools**: `ts-node` (v10.9.2), `@types/node` (v20.11.24)
 
@@ -47,7 +48,9 @@ src/
 │     └── client.ts         → Telegram Bot API helper (SendMessage, EditMessage)
 └── services/
       ├── taskService.ts    → Business logic for tasks (Decomposition, Rollover, Prefix Generation)
-      └── reportService.ts  → Business logic for weekly performance reports (Metrics calculation)
+      ├── reportService.ts  → Business logic for weekly performance reports (Metrics calculation)
+      ├── stateManager.ts   → Firestore state management for draft plans
+      └── highlightService.ts → Daily Highlight logic
 tests/
 └── localTest.ts            → Local harness to simulate API payloads and flow execution
 docs/
@@ -79,6 +82,7 @@ import { Client } from '@notionhq/client';
 
 export interface TaskInput {
   name: string;
+  description?: string; // Mapped to a Callout block
   projectName?: string;
   priority: 'High' | 'Medium' | 'Low';
   estimate: number; // in hours
@@ -122,18 +126,27 @@ export async function createTaskInNotion(
     properties,
   });
 
+  const children: any[] = [];
+  if (task.description) {
+    children.push({
+      object: 'block',
+      type: 'callout',
+      callout: { icon: { type: 'emoji', emoji: '💡' }, color: 'gray_background', rich_text: [{ type: 'text', text: { content: task.description } }] }
+    });
+  }
+
   if (task.checklist.length > 0) {
-    await notion.blocks.children.append({
-      block_id: response.id,
-      children: task.checklist.map(item => ({
+    for (const item of task.checklist) {
+      children.push({
         object: 'block',
         type: 'to_do',
-        to_do: {
-          rich_text: [{ type: 'text', text: { content: item } }],
-          checked: false,
-        },
-      })),
-    });
+        to_do: { rich_text: [{ type: 'text', text: { content: item } }], checked: false }
+      });
+    }
+  }
+
+  if (children.length > 0) {
+    await notion.blocks.children.append({ block_id: response.id, children });
   }
 
   return response.id;
@@ -206,6 +219,6 @@ Cho phép người dùng mô tả kế hoạch tuần bằng ngôn ngữ tự nh
   - `[✅ Tạo tất cả]` → tạo hàng loạt vào Tasks DB.
   - `[✏️ Sửa]` → cho phép người dùng điều chỉnh (gửi lại text hoặc hủy từng mục).
   - `[❌ Hủy]` → bỏ toàn bộ, không ghi gì vào Notion.
-- **Bulk creation**: Khi nhấn `[✅ Tạo tất cả]`, hệ thống gọi `createTaskInNotion` cho từng task tuần tự (để prefix tăng dần chính xác và tránh rate limit), tạo các `to_do` block tương ứng, sau đó báo cáo tổng kết số task đã tạo thành công về Telegram.
+- **Bulk creation**: Khi nhấn `[✅ Tạo tất cả]`, hệ thống gọi `createTaskInNotion` cho từng task tuần tự có chèn **Throttle delay (350ms)** để tránh Notion API Rate Limits (HTTP 429). Sau đó trả về Telegram các **Deep Link `notion://`** để mở native app nhanh chóng.
 - **Report ingestion**: Ngoài kế hoạch tuần, người dùng có thể dán một báo cáo/transcript trao đổi với Gemini qua cùng lệnh `/plan_week`; bot áp dụng cùng pipeline bóc tách → preview → confirm → bulk create.
-- **Idempotency**: Mỗi phiên `/plan_week` gắn một draft ID; chỉ tạo task khi người dùng nhấn confirm, tránh tạo trùng nếu nhấn nút nhiều lần.
+- **Idempotency & State**: Mỗi phiên `/plan_week` gắn một draft ID lưu trữ trong **GCP Firestore** (thay vì in-memory Map) để bảo toàn state khi scale serverless functions. Chỉ tạo task khi người dùng nhấn confirm, tránh tạo trùng nếu nhấn nút nhiều lần. Cuối cùng, bot dọn dẹp (delete) draft trên Firestore.

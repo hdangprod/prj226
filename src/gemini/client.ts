@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI, Schema, Type } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import type { Schema } from '@google/generative-ai';
 import { config, MODELS } from '../config';
 import type { GeminiTaskOutput } from '../notion/types';
 
@@ -6,25 +7,26 @@ const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
 
 // Define Gemini JSON schema for a single task output
 const taskSchema: Schema = {
-  type: Type.OBJECT,
+  type: SchemaType.OBJECT,
   properties: {
-    name: { type: Type.STRING, description: 'Actionable and concise task name' },
-    projectName: { type: Type.STRING, description: 'Name of the related project, if mentioned. E.g., PRJ226' },
-    priority: { type: Type.STRING, description: 'Priority of the task: High, Medium, or Low', enum: ['High', 'Medium', 'Low'] },
-    estimate: { type: Type.NUMBER, description: 'Estimated effort in hours. Default to 1 if unknown.' },
-    dueDate: { type: Type.STRING, description: 'Due date in YYYY-MM-DD format.' },
+    name: { type: SchemaType.STRING, description: 'Actionable and concise task name' },
+    description: { type: SchemaType.STRING, description: 'A concise 1-2 sentence summary of the context, rationale, or notes for this task. Capture any background information the user provided.' },
+    projectName: { type: SchemaType.STRING, description: 'Name of the related project, if mentioned. E.g., PRJ226' },
+    priority: { type: SchemaType.STRING, description: 'Priority of the task: High, Medium, or Low', enum: ['High', 'Medium', 'Low'] },
+    estimate: { type: SchemaType.NUMBER, description: 'Estimated effort in hours. Default to 1 if unknown.' },
+    dueDate: { type: SchemaType.STRING, description: 'Due date in YYYY-MM-DD format.' },
     checklist: {
-      type: Type.ARRAY,
+      type: SchemaType.ARRAY,
       description: 'A list of 2-5 actionable subtasks to complete the main task.',
-      items: { type: Type.STRING },
+      items: { type: SchemaType.STRING },
     },
   },
-  required: ['name', 'priority', 'estimate', 'dueDate', 'checklist'],
+  required: ['name', 'description', 'priority', 'estimate', 'dueDate', 'checklist'],
 };
 
 // Define Gemini JSON schema for an array of tasks (for weekly planning)
 const weeklyPlanSchema: Schema = {
-  type: Type.ARRAY,
+  type: SchemaType.ARRAY,
   description: 'An array of tasks planned for the week.',
   items: taskSchema,
 };
@@ -48,6 +50,7 @@ export async function parseTaskInput(text: string, currentDate: string): Promise
     If priority is not mentioned, infer it or default to "Medium".
     If estimate is not mentioned, infer based on complexity or default to 1.
     Create a checklist of 2-5 actionable steps to complete this task.
+    For the "description" field: extract any background context, rationale, or notes the user provided and condense it into a concise 1-2 sentence summary. This helps preserve working context.
     
     User Request: "${text}"
   `;
