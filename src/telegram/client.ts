@@ -17,6 +17,21 @@ export function escapeMarkdown(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/**
+ * Internal helper: reads the fetch Response body exactly ONCE
+ * and returns the parsed JSON. If the response is not OK, logs the
+ * error body and returns it (instead of trying to read the stream a second time).
+ */
+async function handleResponse(response: Response, label: string): Promise<any> {
+  const body = await response.json();
+
+  if (!response.ok) {
+    console.error(`[Telegram] ${label} failed:`, JSON.stringify(body));
+  }
+
+  return body;
+}
+
 export async function sendMessage(
   chatId: number | string,
   text: string,
@@ -38,12 +53,7 @@ export async function sendMessage(
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[Telegram] Failed to send message:', errorText);
-  }
-
-  return response.json();
+  return handleResponse(response, 'sendMessage');
 }
 
 export async function editMessageText(
@@ -69,7 +79,7 @@ export async function editMessageText(
     body: JSON.stringify(payload),
   });
 
-  return response.json();
+  return handleResponse(response, 'editMessageText');
 }
 
 export async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<any> {
@@ -87,5 +97,5 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
     body: JSON.stringify(payload),
   });
 
-  return response.json();
+  return handleResponse(response, 'answerCallbackQuery');
 }
