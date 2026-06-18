@@ -1,11 +1,9 @@
 import { sendMessage, editMessageText, answerCallbackQuery, escapeMarkdown } from './telegram/client';
 import {
-  addTaskFromText,
   rolloverTask,
   rescueTask,
   completeTask,
   getTaskById,
-  viewTodayTasks,
   getTodayTaskPages,
   planWeekDraft,
   bulkCreateTasks,
@@ -13,8 +11,15 @@ import {
 import type { PlannedTask } from './services/taskService';
 import { updateHighlight } from './services/highlightService';
 import { generateWeeklyReport } from './services/reportService';
-import { getOrCreateDailyLog, queryTasksByProject } from './notion/client';
-import { saveDraft, loadDraft, deleteDraft } from './services/stateManager';
+import { 
+  getOrCreateDailyLog, 
+  queryTasksByProject, 
+  fetchActiveProjects, 
+  createProject, 
+  createTask 
+} from './notion/client';
+import { saveDraft, loadDraft, deleteDraft, saveSession, loadSession, deleteSession } from './services/stateManager';
+import { parseTaskInput } from './gemini/client';
 
 interface TelegramUpdate {
   message?: {
@@ -73,16 +78,25 @@ export async function handleUpdate(body: unknown): Promise<void> {
   if (update.callback_query) {
     const { data, message, id: callbackId } = update.callback_query;
     const chatId = message.chat.id;
-    const [action, taskId] = data.split(':');
+    
+    // Some actions have an id after the colon, e.g., 'complete:123'
+    // For addtask_proj, it's 'addtask_proj:projId'
+    const colonIndex = data.indexOf(':');
+    let action = data;
+    let payloadStr = '';
+    if (colonIndex !== -1) {
+      action = data.substring(0, colonIndex);
+      payloadStr = data.substring(colonIndex + 1);
+    }
 
     try {
       if (action === 'complete') {
-        await completeTask(taskId);
+        await completeTask(payloadStr);
         await answerCallbackQuery(callbackId, 'Task marked as Done!');
         await editMessageText(chatId, message.message_id, '✅ Task marked as Done!');
 
       } else if (action === 'defer') {
-        const task = await getTaskById(taskId);
+        const task = await getTaskById(payloadStr);
         const newId = await rolloverTask(task, getTomorrowStr());
         await answerCallbackQuery(callbackId, 'Deferred!');
         const deepLink = notionDeepLink(newId);
@@ -96,12 +110,12 @@ export async function handleUpdate(body: unknown): Promise<void> {
         );
 
       } else if (action === 'plan_confirm') {
-        const drafts = await loadDraft(taskId);
+        const drafts = await loadDraft(payloadStr);
         if (!drafts) {
           await answerCallbackQuery(callbackId, 'This plan has expired or was already created.');
           return;
         }
-        await deleteDraft(taskId);
+        await deleteDraft(payloadStr);
         await answerCallbackQuery(callbackId, 'Creating tasks...');
 
         const dailyLog = await getOrCreateDailyLog(getTodayStr());
@@ -123,7 +137,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
         );
 
       } else if (action === 'plan_edit') {
-        await deleteDraft(taskId);
+        await deleteDraft(payloadStr);
         await answerCallbackQuery(callbackId);
         await editMessageText(
           chatId,
@@ -132,9 +146,52 @@ export async function handleUpdate(body: unknown): Promise<void> {
         );
 
       } else if (action === 'plan_cancel') {
-        await deleteDraft(taskId);
+        await deleteDraft(payloadStr);
         await answerCallbackQuery(callbackId, 'Cancelled.');
         await editMessageText(chatId, message.message_id, '❌ Plan cancelled. Nothing was created.');
+      
+      } else if (action === 'addtask_proj') {
+        // payloadStr = projectId
+        const session = await loadSession(chatId);
+        if (!session || session.state !== 'AWAITING_PROJECT_SELECTION') {
+          await answerCallbackQuery(callbackId, 'Session expired.');
+          return;
+        }
+        await answerCallbackQuery(callbackId, 'Creating task...');
+        await deleteSession(chatId);
+
+        const dailyLog = await getOrCreateDailyLog(getTodayStr());
+        // Use the selected project's name as task prefix if it was not in taskInput (or even if it was, override for consistency?)
+        // The project name isn't directly in the callback payload, but createTask doesn't STRICTLY need task.projectName
+        // Wait, createTask uses task.projectName for prefix.
+        // We will just create the task with the selected project ID.
+        // If task.projectName is missing, createTask won't add prefix. Let's fix that in createTask later to fetch project name if missing.
+        const taskId = await createTask(session.taskInput, payloadStr, dailyLog.id);
+        const deepLink = notionDeepLink(taskId);
+
+        await editMessageText(
+          chatId,
+          message.message_id,
+          `✅ Task created and linked to project!`,
+          { inline_keyboard: [[{ text: '📂 Mở trong Notion', url: deepLink }]] }
+        );
+
+      } else if (action === 'addtask_newproj') {
+        const session = await loadSession(chatId);
+        if (!session || session.state !== 'AWAITING_PROJECT_SELECTION') {
+          await answerCallbackQuery(callbackId, 'Session expired.');
+          return;
+        }
+        await answerCallbackQuery(callbackId);
+        
+        session.state = 'AWAITING_PROJECT_NAME';
+        await saveSession(chatId, session);
+
+        await editMessageText(
+          chatId,
+          message.message_id,
+          `📝 Vui lòng nhập mã/tên cho Project mới (vd: PRJ226):`
+        );
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -152,6 +209,36 @@ export async function handleUpdate(body: unknown): Promise<void> {
   const today = getTodayStr();
 
   try {
+    // Check conversational state first
+    const session = await loadSession(chatId);
+    if (session && session.state === 'AWAITING_PROJECT_NAME') {
+      if (text.startsWith('/')) {
+        // Abort session if user types a command
+        await deleteSession(chatId);
+        await sendMessage(chatId, '⚠️ Đã hủy tạo task do phát hiện lệnh mới.');
+      } else {
+        await sendMessage(chatId, '⏳ Đang khởi tạo Project và tạo Task...');
+        const projectName = text;
+        const newProj = await createProject(projectName);
+        
+        // Update taskInput to ensure the new project's name is used as prefix
+        session.taskInput.projectName = newProj.name;
+
+        const dailyLog = await getOrCreateDailyLog(today);
+        const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
+        const deepLink = notionDeepLink(taskId);
+
+        await deleteSession(chatId);
+
+        await sendMessage(
+          chatId,
+          `✅ Đã tạo Project mới <b>${escapeMarkdown(newProj.name)}</b> và liên kết Task thành công!`,
+          { inline_keyboard: [[{ text: '📂 Mở trong Notion', url: deepLink }]] }
+        );
+        return;
+      }
+    }
+
     // /start
     if (text.startsWith('/start')) {
       await sendMessage(
@@ -166,12 +253,33 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await sendMessage(chatId, '⚠️ Vui lòng nhập nội dung task. Ví dụ: <code>/add_task Thiết kế UI cho PRJ226, High, 2h</code>');
         return;
       }
-      const dailyLog = await getOrCreateDailyLog(today);
-      const pageId = await addTaskFromText(input, today, undefined, dailyLog.id);
-      const deepLink = notionDeepLink(pageId);
-      await sendMessage(chatId, `✅ Task created!`, {
-        inline_keyboard: [[{ text: '📂 Mở trong Notion', url: deepLink }]],
-      });
+      
+      await sendMessage(chatId, '⏳ Đang phân tích task...');
+      const parsedTask = await parseTaskInput(input, today);
+      const activeProjects = await fetchActiveProjects();
+
+      if (activeProjects.length > 0) {
+        await saveSession(chatId, { state: 'AWAITING_PROJECT_SELECTION', taskInput: parsedTask });
+        
+        // Build inline keyboard for projects
+        const keyboard: any[][] = [];
+        for (const proj of activeProjects) {
+          keyboard.push([{ text: `📁 ${proj.name}`, callback_data: `addtask_proj:${proj.id}` }]);
+        }
+        keyboard.push([{ text: '➕ Tạo Project mới', callback_data: `addtask_newproj` }]);
+
+        await sendMessage(
+          chatId,
+          `✅ Phân tích xong: <b>${escapeMarkdown(parsedTask.name)}</b>\nVui lòng chọn Project cho task này:`,
+          { inline_keyboard: keyboard }
+        );
+      } else {
+        await saveSession(chatId, { state: 'AWAITING_PROJECT_NAME', taskInput: parsedTask });
+        await sendMessage(
+          chatId,
+          `✅ Phân tích xong: <b>${escapeMarkdown(parsedTask.name)}</b>\nHiện tại chưa có Project nào. Vui lòng nhập mã/tên cho Project mới (vd: PRJ226):`
+        );
+      }
 
     // /view_task
     } else if (text.startsWith('/view_task') || text.startsWith('/tasks')) {

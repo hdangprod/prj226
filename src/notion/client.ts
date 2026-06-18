@@ -40,9 +40,14 @@ export async function createTask(
   dailyLogId?: string
 ): Promise<string> {
   let taskPrefix = '';
-  if (projectId && task.projectName) {
-    const existingTasksCount = await countTasksInProject(projectId);
-    taskPrefix = `${task.projectName}_T${existingTasksCount + 1}: `;
+  if (projectId) {
+    // Tự động fetch tên project thực tế từ Notion để làm prefix
+    const projectPage = await notion.pages.retrieve({ page_id: projectId }) as NotionPage;
+    const actualProjectName = getTitle(projectPage);
+    if (actualProjectName) {
+      const existingTasksCount = await countTasksInProject(projectId);
+      taskPrefix = `${actualProjectName}_T${existingTasksCount + 1}: `;
+    }
   }
 
   const properties: Record<string, unknown> = {
@@ -179,6 +184,28 @@ export async function findProjectByName(
     (c) =>
       c.name.toLowerCase().includes(needle) || needle.includes(c.name.toLowerCase())
   );
+}
+
+export async function fetchActiveProjects(): Promise<{ id: string; name: string }[]> {
+  const response = await notion.databases.query({
+    database_id: config.NOTION_PROJECTS_DB_ID,
+    filter: { property: 'Status', select: { equals: 'Active' } },
+  });
+  return (response.results as NotionPage[]).map((p) => ({
+    id: p.id,
+    name: getTitle(p),
+  }));
+}
+
+export async function createProject(name: string): Promise<{ id: string; name: string }> {
+  const newPage = await notion.pages.create({
+    parent: { database_id: config.NOTION_PROJECTS_DB_ID },
+    properties: {
+      Name: { title: [{ text: { content: name } }] },
+      Status: { select: { name: 'Active' } },
+    },
+  });
+  return { id: newPage.id, name };
 }
 
 /**
