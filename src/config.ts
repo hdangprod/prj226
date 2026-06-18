@@ -37,6 +37,6 @@ export const config = validateEnv();
  *   - PRO:  low-frequency, complex reasoning (bulk planning, retrospective)
  */
 export const MODELS = {
-  LITE: process.env.GEMINI_MODEL_LITE || 'gemini-1.5-flash',
-  PRO: process.env.GEMINI_MODEL_PRO || 'gemini-1.5-pro',
+  LITE: process.env.GEMINI_MODEL_LITE || 'gemini-3.1-flash-lite',
+  PRO: process.env.GEMINI_MODEL_PRO || 'gemini-3.5-flash',
 } as const;
