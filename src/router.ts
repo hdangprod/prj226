@@ -1,14 +1,14 @@
-import { sendMessage, editMessageText, answerCallbackQuery, escapeMarkdown } from './telegram/client';
+import { sendMessage, editMessageText, answerCallbackQuery, escapeHtml } from './telegram/client';
+import { BOT_MESSAGES } from './constants/messages';
 import {
   rolloverTask,
   rescueTask,
   completeTask,
   getTaskById,
   getTodayTaskPages,
-  planWeekDraft,
   bulkCreateTasks,
 } from './services/taskService';
-import type { PlannedTask } from './services/taskService';
+import { WeeklyPlanningSkill, type PlannedTask } from './skills/WeeklyPlanningSkill';
 import { updateHighlight } from './services/highlightService';
 import { generateWeeklyReport } from './services/reportService';
 import { 
@@ -40,19 +40,16 @@ function notionDeepLink(pageId: string): string {
   return `notion://notion.so/${pageId.replace(/-/g, '')}`;
 }
 
-function newDraftId(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 function formatPlanPreview(drafts: PlannedTask[]): string {
   const lines: string[] = [`🗓 <b>Weekly Plan Preview</b> (${drafts.length} tasks)\n`];
   drafts.forEach((d, i) => {
     lines.push(
-      `<b>${i + 1}. ${escapeMarkdown(d.prefixedName)}</b>\n` +
+      `<b>${i + 1}. ${escapeHtml(d.prefixedName)}</b>\n` +
         `   Priority: ${d.task.priority} | Est: ${d.task.estimate}h | Due: ${d.task.dueDate}` +
         (!d.projectId ? `\n   ⚠️ Project not found — will be created unlinked` : '') +
         (d.task.checklist.length
-          ? `\n   • ${d.task.checklist.map(escapeMarkdown).join('\n   • ')}`
+          ? `\n   • ${d.task.checklist.map(escapeHtml).join('\n   • ')}`
           : '')
     );
   });
@@ -92,46 +89,46 @@ export async function handleUpdate(body: unknown): Promise<void> {
     try {
       if (action === 'complete') {
         await completeTask(payloadStr);
-        await answerCallbackQuery(callbackId, 'Task marked as Done!');
-        await editMessageText(chatId, message.message_id, '✅ Task marked as Done!');
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.SUCCESS.TASK_DONE);
+        await editMessageText(chatId, message.message_id, BOT_MESSAGES.SUCCESS.TASK_DONE);
 
       } else if (action === 'defer') {
         const task = await getTaskById(payloadStr);
         const newId = await rolloverTask(task, getTomorrowStr());
-        await answerCallbackQuery(callbackId, 'Deferred!');
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.DEFERRED);
         const deepLink = notionDeepLink(newId);
         await editMessageText(
           chatId,
           message.message_id,
-          `⏳ Task deferred. Rollover created for tomorrow.`,
+          BOT_MESSAGES.SUCCESS.TASK_DEFERRED,
           {
-            inline_keyboard: [[{ text: '📂 Mở Rollover Task', url: deepLink }]],
+            inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_ROLLOVER, url: deepLink }]],
           }
         );
 
       } else if (action === 'plan_confirm') {
         const drafts = await loadDraft(payloadStr);
         if (!drafts) {
-          await answerCallbackQuery(callbackId, 'This plan has expired or was already created.');
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.PLAN_EXPIRED);
           return;
         }
         await deleteDraft(payloadStr);
-        await answerCallbackQuery(callbackId, 'Creating tasks...');
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.CREATING_TASKS);
 
         const dailyLog = await getOrCreateDailyLog(getTodayStr());
         const result = await bulkCreateTasks(drafts, dailyLog.id);
 
         const linkList = result.taskIds
-          .map((id, i) => `${i + 1}. <a href="${notionDeepLink(id)}">Open in Notion</a>`)
+          .map((id, i) => `${i + 1}. <a href="${notionDeepLink(id)}">${BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION}</a>`)
           .join('\n');
 
         await editMessageText(
           chatId,
           message.message_id,
-          `✅ Created ${result.createdCount}/${drafts.length} tasks!\n\n${linkList}`,
+          `${BOT_MESSAGES.SUCCESS.PLAN_CREATED(result.createdCount, drafts.length)}\n\n${linkList}`,
           {
             inline_keyboard: result.taskIds.slice(0, 3).map((id, i) => [
-              { text: `📂 Task ${i + 1}`, url: notionDeepLink(id) },
+              { text: BOT_MESSAGES.BUTTONS.OPEN_TASK(i + 1), url: notionDeepLink(id) },
             ]),
           }
         );
@@ -142,22 +139,22 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await editMessageText(
           chatId,
           message.message_id,
-          `✏️ Plan discarded. Send <code>/plan_week &lt;your revised plan&gt;</code> to try again.`
+          BOT_MESSAGES.ERRORS.PLAN_EDIT_DISCARDED
         );
 
       } else if (action === 'plan_cancel') {
         await deleteDraft(payloadStr);
-        await answerCallbackQuery(callbackId, 'Cancelled.');
-        await editMessageText(chatId, message.message_id, '❌ Plan cancelled. Nothing was created.');
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.CANCELLED);
+        await editMessageText(chatId, message.message_id, BOT_MESSAGES.ERRORS.PLAN_CANCELLED);
       
       } else if (action === 'addtask_proj') {
         // payloadStr = projectId
         const session = await loadSession(chatId);
         if (!session || session.state !== 'AWAITING_PROJECT_SELECTION') {
-          await answerCallbackQuery(callbackId, 'Session expired.');
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
           return;
         }
-        await answerCallbackQuery(callbackId, 'Creating task...');
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.CREATING_TASK_SINGLE);
         await deleteSession(chatId);
 
         const dailyLog = await getOrCreateDailyLog(getTodayStr());
@@ -172,14 +169,14 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await editMessageText(
           chatId,
           message.message_id,
-          `✅ Task created and linked to project!`,
-          { inline_keyboard: [[{ text: '📂 Mở trong Notion', url: deepLink }]] }
+          BOT_MESSAGES.SUCCESS.TASK_CREATED,
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
         );
 
       } else if (action === 'addtask_newproj') {
         const session = await loadSession(chatId);
         if (!session || session.state !== 'AWAITING_PROJECT_SELECTION') {
-          await answerCallbackQuery(callbackId, 'Session expired.');
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
           return;
         }
         await answerCallbackQuery(callbackId);
@@ -190,7 +187,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await editMessageText(
           chatId,
           message.message_id,
-          `📝 Vui lòng nhập mã/tên cho Project mới (vd: PRJ226):`
+          BOT_MESSAGES.PROMPTS.NO_PROJECT_PROMPT
         );
       }
     } catch (err: unknown) {
@@ -215,9 +212,9 @@ export async function handleUpdate(body: unknown): Promise<void> {
       if (text.startsWith('/')) {
         // Abort session if user types a command
         await deleteSession(chatId);
-        await sendMessage(chatId, '⚠️ Đã hủy tạo task do phát hiện lệnh mới.');
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
       } else {
-        await sendMessage(chatId, '⏳ Đang khởi tạo Project và tạo Task...');
+        await sendMessage(chatId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
         const projectName = text;
         const newProj = await createProject(projectName);
         
@@ -232,8 +229,8 @@ export async function handleUpdate(body: unknown): Promise<void> {
 
         await sendMessage(
           chatId,
-          `✅ Đã tạo Project mới <b>${escapeMarkdown(newProj.name)}</b> và liên kết Task thành công!`,
-          { inline_keyboard: [[{ text: '📂 Mở trong Notion', url: deepLink }]] }
+          BOT_MESSAGES.SUCCESS.PROJECT_CREATED(escapeHtml(newProj.name)),
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
         );
         return;
       }
@@ -243,18 +240,18 @@ export async function handleUpdate(body: unknown): Promise<void> {
     if (text.startsWith('/start')) {
       await sendMessage(
         chatId,
-        `Chào Sếp! Tôi là Liam, trợ lý Second Brain của Sếp. 🧠\n\nCác lệnh:\n• <code>/add_task &lt;text&gt;</code> — Tạo task\n• <code>/view_task</code> — Task hôm nay\n• <code>/rescue</code> — Tìm task cứu vãn tập trung\n• <code>/highlight &lt;text&gt;</code> — Ghi nhận thành tựu\n• <code>/plan_week &lt;text&gt;</code> — Lập kế hoạch tuần\n• <code>/weekly_report</code> — Báo cáo tuần`
+        BOT_MESSAGES.GREETINGS.WELCOME
       );
 
     // /add_task
     } else if (text.startsWith('/add_task')) {
       const input = text.replace('/add_task', '').trim();
       if (!input) {
-        await sendMessage(chatId, '⚠️ Vui lòng nhập nội dung task. Ví dụ: <code>/add_task Thiết kế UI cho PRJ226, High, 2h</code>');
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.INPUT_REQUIRED_ADD_TASK);
         return;
       }
       
-      await sendMessage(chatId, '⏳ Đang phân tích task...');
+      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_TASK);
       const parsedTask = await parseTaskInput(input, today);
       const activeProjects = await fetchActiveProjects();
 
@@ -270,14 +267,14 @@ export async function handleUpdate(body: unknown): Promise<void> {
 
         await sendMessage(
           chatId,
-          `✅ Phân tích xong: <b>${escapeMarkdown(parsedTask.name)}</b>\nVui lòng chọn Project cho task này:`,
+          BOT_MESSAGES.SUCCESS.TASK_ANALYZED(escapeHtml(parsedTask.name)) + '\n' + BOT_MESSAGES.PROMPTS.CHOOSE_PROJECT,
           { inline_keyboard: keyboard }
         );
       } else {
         await saveSession(chatId, { state: 'AWAITING_PROJECT_NAME', taskInput: parsedTask });
         await sendMessage(
           chatId,
-          `✅ Phân tích xong: <b>${escapeMarkdown(parsedTask.name)}</b>\nHiện tại chưa có Project nào. Vui lòng nhập mã/tên cho Project mới (vd: PRJ226):`
+          BOT_MESSAGES.SUCCESS.TASK_ANALYZED(escapeHtml(parsedTask.name)) + '\n' + BOT_MESSAGES.PROMPTS.NO_PROJECT_PROMPT
         );
       }
 
@@ -285,7 +282,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
     } else if (text.startsWith('/view_task') || text.startsWith('/tasks')) {
       const tasks = await getTodayTaskPages(today);
       if (tasks.length === 0) {
-        await sendMessage(chatId, '🎉 Hôm nay không còn task chưa hoàn thành!');
+        await sendMessage(chatId, BOT_MESSAGES.SUCCESS.NO_PENDING_TASKS);
       } else {
         for (const t of tasks) {
           let projectInfo = '';
@@ -294,12 +291,12 @@ export async function handleUpdate(body: unknown): Promise<void> {
             const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
             projectInfo = ` (Tiến độ: ${pct}%)`;
           }
-          const msg = `<b>${escapeMarkdown(t.name)}</b>\nPriority: ${t.priority} | Est: ${t.estimate}h${projectInfo}`;
+          const msg = `<b>${escapeHtml(t.name)}</b>\nPriority: ${t.priority} | Est: ${t.estimate}h${projectInfo}`;
           await sendMessage(chatId, msg, {
             inline_keyboard: [
               [
-                { text: '✅ Complete', callback_data: `complete:${t.id}` },
-                { text: '⏳ Defer', callback_data: `defer:${t.id}` },
+                { text: BOT_MESSAGES.BUTTONS.COMPLETE, callback_data: `complete:${t.id}` },
+                { text: BOT_MESSAGES.BUTTONS.DEFER, callback_data: `defer:${t.id}` },
               ],
             ],
           });
@@ -310,19 +307,19 @@ export async function handleUpdate(body: unknown): Promise<void> {
     } else if (text.startsWith('/rescue')) {
       const rescued = await rescueTask();
       if (!rescued) {
-        await sendMessage(chatId, '💡 Không tìm thấy task High Priority ≤ 30 phút. Hãy xem <code>/view_task</code>!');
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.NO_HIGH_PRIORITY_TASK);
       } else {
         const deepLink = notionDeepLink(rescued.id);
         await sendMessage(
           chatId,
-          `⚡ <b>FOCUS RESCUE</b> ⚡\n\n<b>${escapeMarkdown(rescued.name)}</b>\nPriority: High | Est: ${rescued.estimate}h\n\n👉 Bắt đầu ngay 25 phút Pomodoro!`,
+          BOT_MESSAGES.PROMPTS.FOCUS_RESCUE_TITLE + `\n\n<b>${escapeHtml(rescued.name)}</b>\nPriority: High | Est: ${rescued.estimate}h\n\n` + BOT_MESSAGES.PROMPTS.FOCUS_RESCUE_FOOTER,
           {
             inline_keyboard: [
               [
-                { text: '✅ Complete', callback_data: `complete:${rescued.id}` },
-                { text: '⏳ Defer', callback_data: `defer:${rescued.id}` },
+                { text: BOT_MESSAGES.BUTTONS.COMPLETE, callback_data: `complete:${rescued.id}` },
+                { text: BOT_MESSAGES.BUTTONS.DEFER, callback_data: `defer:${rescued.id}` },
               ],
-              [{ text: '📂 Mở trong Notion', url: deepLink }],
+              [{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }],
             ],
           }
         );
@@ -332,11 +329,11 @@ export async function handleUpdate(body: unknown): Promise<void> {
     } else if (text.startsWith('/highlight')) {
       const input = text.replace('/highlight', '').trim();
       if (!input) {
-        await sendMessage(chatId, '⚠️ Vui lòng nhập nội dung. Ví dụ: <code>/highlight Đóng gói thành công tính năng chatbot</code>');
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.INPUT_REQUIRED_HIGHLIGHT);
         return;
       }
       await updateHighlight(input, today);
-      await sendMessage(chatId, '📝 Daily Log highlight updated!');
+      await sendMessage(chatId, BOT_MESSAGES.SUCCESS.HIGHLIGHT_UPDATED);
 
     // /plan_week
     } else if (text.startsWith('/plan_week')) {
@@ -344,22 +341,23 @@ export async function handleUpdate(body: unknown): Promise<void> {
       if (!input) {
         await sendMessage(
           chatId,
-          'Usage: <code>/plan_week &lt;describe your week&gt;</code>'
+          BOT_MESSAGES.ERRORS.INPUT_REQUIRED_PLAN_WEEK
         );
       } else {
-        await sendMessage(chatId, '⏳ Analyzing your weekly plan...');
-        const drafts = await planWeekDraft(input, today);
+        await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_WEEKLY_PLAN);
+        
+        const skill = new WeeklyPlanningSkill();
+        const { draftId, drafts } = await skill.execute({ text: input, today });
+        
         if (drafts.length === 0) {
-          await sendMessage(chatId, '🤔 Không thể bóc tách được task nào. Hãy thử mô tả chi tiết hơn.');
+          await sendMessage(chatId, BOT_MESSAGES.ERRORS.NO_TASK_FOUND);
         } else {
-          const draftId = newDraftId();
-          await saveDraft(draftId, drafts);
           await sendMessage(chatId, formatPlanPreview(drafts), {
             inline_keyboard: [
               [
-                { text: '✅ Tạo tất cả', callback_data: `plan_confirm:${draftId}` },
-                { text: '✏️ Sửa', callback_data: `plan_edit:${draftId}` },
-                { text: '❌ Hủy', callback_data: `plan_cancel:${draftId}` },
+                { text: BOT_MESSAGES.BUTTONS.CREATE_ALL, callback_data: `plan_confirm:${draftId}` },
+                { text: BOT_MESSAGES.BUTTONS.EDIT, callback_data: `plan_edit:${draftId}` },
+                { text: BOT_MESSAGES.BUTTONS.CANCEL, callback_data: `plan_cancel:${draftId}` },
               ],
             ],
           });
@@ -368,7 +366,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
 
     // /weekly_report
     } else if (text.startsWith('/weekly_report') || text.startsWith('/retro')) {
-      await sendMessage(chatId, '⏳ Liam đang tổng hợp chỉ số hiệu suất tuần...');
+      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_REPORT);
       const report = await generateWeeklyReport();
       await sendMessage(chatId, report);
 
@@ -376,12 +374,12 @@ export async function handleUpdate(body: unknown): Promise<void> {
     } else {
       await sendMessage(
         chatId,
-        'Unknown command. Available:\n/add_task /view_task /rescue /highlight /plan_week /weekly_report'
+        BOT_MESSAGES.ERRORS.UNKNOWN_COMMAND
       );
     }
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[Router] Error:', errMsg);
-    await sendMessage(chatId, `❌ Something went wrong: ${escapeMarkdown(errMsg)}`);
+    await sendMessage(chatId, BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errMsg)));
   }
 }

@@ -1,4 +1,4 @@
-import { parseTaskInput, parseWeeklyPlan, translateHighlight } from '../gemini/client';
+import { parseTaskInput, translateHighlight } from '../gemini/client';
 import {
   createTask,
   findProjectByName,
@@ -13,6 +13,7 @@ import {
   countTasksInProject,
 } from '../notion/client';
 import type { TaskInput, TaskPage, GeminiTaskOutput } from '../notion/types';
+import type { PlannedTask } from '../skills/WeeklyPlanningSkill';
 
 // ─── Helpers ───
 
@@ -120,39 +121,7 @@ export async function rescueTask(): Promise<TaskPage | null> {
 }
 
 // ─── FR-7: Plan Week Draft ───
-
-export interface PlannedTask {
-  task: GeminiTaskOutput;
-  projectId?: string;
-  prefixedName: string;
-}
-
-export async function planWeekDraft(
-  text: string,
-  today: string
-): Promise<PlannedTask[]> {
-  const parsed = await parseWeeklyPlan(text, today);
-  const result: PlannedTask[] = [];
-
-  for (const t of parsed) {
-    let projectId: string | undefined;
-    let prefix = '';
-    if (t.projectName) {
-      const project = await findProjectByName(t.projectName);
-      if (project) {
-        projectId = project.id;
-        const count = await countTasksInProject(project.id);
-        prefix = `${t.projectName}_T${count + result.filter((r) => r.projectId === project.id).length + 1}: `;
-      }
-    }
-    result.push({
-      task: t,
-      projectId,
-      prefixedName: `${prefix}${t.name}`,
-    });
-  }
-  return result;
-}
+// Logic đã được chuyển sang src/skills/WeeklyPlanningSkill.ts
 
 // ─── FR-7: Bulk Create ───
 

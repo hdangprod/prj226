@@ -1,3 +1,10 @@
+---
+title: "Spec: Telegram Bot Notion Second Brain Orchestrator"
+version: 1.1.0
+date: 2026-06-20
+type: specification
+---
+
 # Spec: Telegram Bot Notion Second Brain Orchestrator
 
 ## Objective
@@ -44,7 +51,10 @@ To optimize operational costs while maintaining high-quality reasoning, the syst
 > **Telegram Commands**: `/add_task`, `/view_task`, `/rescue`, `/highlight`, `/plan_week`, `/weekly_report`. Lệnh `/plan_week <text>` (FR-7) cho phép lập kế hoạch tuần bằng ngôn ngữ tự nhiên để tạo hàng loạt task.
 
 ## Project Structure
-```
+```text
+.agents/
+├── rules/                  → Quy tắc ràng buộc kỹ thuật (vd: notion-limits)
+└── workflows/              → Quy trình kiểm tra hệ thống (vd: deploy-check)
 src/
 ├── index.ts                → HTTP Webhook entry point (Google Cloud Function)
 ├── config.ts               → Environment variable validation, global config & Model Tier definitions
@@ -55,11 +65,14 @@ src/
 │     └── client.ts         → Gemini API NLP processor (Handles dynamic model selection)
 ├── telegram/
 │     └── client.ts         → Telegram Bot API helper (SendMessage, EditMessage)
-└── services/
-      ├── taskService.ts    → Business logic for tasks (Decomposition, Rollover, Prefix Generation)
-      ├── reportService.ts  → Business logic for weekly performance reports (Metrics calculation)
-      ├── stateManager.ts   → Firestore state management for draft plans
-      └── highlightService.ts → Daily Highlight logic
+├── skills/
+│     ├── base.ts           → Interface AgentSkill
+│     └── WeeklyPlanningSkill.ts → Đóng gói logic nghiệp vụ cho lệnh /plan_week
+├── services/
+│     ├── taskService.ts    → Business logic cho Tasks
+│     ├── reportService.ts  → Business logic cho Weekly performance reports (Metrics calculation)
+│     ├── stateManager.ts   → Firestore state management for draft plans
+│     └── highlightService.ts → Daily Highlight logic
 tests/
 └── localTest.ts            → Local harness to simulate API payloads and flow execution
 docs/
@@ -222,8 +235,9 @@ Cho phép người dùng mô tả kế hoạch tuần bằng ngôn ngữ tự nh
 - **Kích hoạt**: Người dùng gửi `/plan_week <text>`, trong đó `<text>` là đoạn mô tả dài (ví dụ: `/plan_week Trong tuần tới tôi sẽ làm về dự án phát triển sản phẩm học tiếng Anh, các đầu việc gồm: lên kế hoạch nghiên cứu người dùng, tạo customer journey map, làm competitive analysis...`).
 - **Routing**: Toàn bộ payload được gửi sang **PRO tier** (Advanced) vì tác vụ đòi hỏi suy luận phân rã nhiều task, suy ra Project/Priority/Estimate và sinh checklist cho từng task.
 - **Output schema (bắt buộc JSON)**: Model trả về một mảng task, mỗi phần tử khớp interface `TaskInput` (`name`, `projectName?`, `priority`, `estimate`, `dueDate`, `checklist[]`). Nếu một trường không suy ra được, model gán mặc định hợp lý (Priority `Medium`, Estimate ước lượng theo độ phức tạp).
-- **Project mapping**: Model suy ra tên dự án từ văn cảnh (ví dụ "dự án phát triển sản phẩm học tiếng Anh"). Hệ thống truy vấn Projects DB để tìm project khớp gần đúng (fuzzy match) và link relation; nếu không tìm thấy thì hỏi người dùng / tạo project mới.
+- **Project mapping**: Model suy ra tên dự án từ văn cảnh (ví dụ "dự án phát triển sản phẩm học tiếng Anh"). Hệ thống truy vấn Projects DB để tìm project khớp gần đúng (fuzzy match) và link relation. Nếu Project không tồn tại, hiển thị Fallback Prefix: `[New Project] <projectName>_T1: ` để Preview rõ ràng trên giao diện người dùng.
 - **Auto-prefix**: Mọi task trong batch áp dụng logic prefix tăng dần `<Project>_T<n>` như FR-1, đánh số tuần tự tiếp nối số task hiện có của project (kể cả các task vừa tạo trong cùng batch).
+- **Error Boundary**: Nếu nội dung nhập vào quá dài hoặc API AI phản hồi sai định dạng JSON, luồng `WeeklyPlanningSkill` sẽ lập tức cắt đứt bằng cơ chế Try-Catch và quăng ra ngoại lệ (Exception): `[AI Planning Skill Fault] Không thể bóc tách JSON kế hoạch tuần do nội dung quá dài hoặc sai cấu trúc.` để Telegram Router xử lý bắt lỗi và báo lại cho người dùng.
 - **Preview & Confirm (bắt buộc)**: Trước khi ghi vào Notion, bot gửi một tin nhắn nháp liệt kê toàn bộ task dự kiến (tên + prefix, project, priority, estimate, checklist) kèm inline buttons:
   - `[✅ Tạo tất cả]` → tạo hàng loạt vào Tasks DB.
   - `[✏️ Sửa]` → cho phép người dùng điều chỉnh (gửi lại text hoặc hủy từng mục).

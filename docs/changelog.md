@@ -1,6 +1,32 @@
+---
+title: "Changelog & Refactoring Notes"
+version: 1.1.0
+date: 2026-06-20
+type: changelog
+---
+
 # Changelog & Refactoring Notes
 
 Tài liệu này ghi chú lại các đợt refactor và thay đổi cấu trúc mã nguồn để hỗ trợ việc review trong tương lai.
+
+## Đợt Refactor 2 (Hiện tại)
+**Mục tiêu**: Chuẩn hóa AI-Native Architecture và tách module Agent Skills.
+
+### Các thay đổi chính
+
+1. **Khởi tạo Ranh giới Kỹ thuật (`.agents/`)**
+   - Định nghĩa quy tắc `notion-limits.md` chống lỗi Rate Limit.
+   - Định nghĩa quy trình kiểm tra `deploy-check.md` trước khi đẩy lên GCP.
+
+2. **Áp dụng mô hình Agent Skills (`src/skills/`)**
+   - Định nghĩa `AgentSkill` interface (abstract layer cho mọi kỹ năng của hệ thống).
+   - Tách toàn bộ logic nghiệp vụ (NLP parsing, prefix generation, Firestore state) của tính năng lập kế hoạch tuần (`/plan_week`) thành `WeeklyPlanningSkill.ts`.
+   - Biến đổi `router.ts` thành Thin Router, chỉ chịu trách nhiệm nhận/trả request thay vì gánh vác logic.
+   - Bổ sung Error Boundary cho Kỹ năng lập kế hoạch tuần, tối ưu hiển thị Fallback Project cho tính năng Preview, và dọn dẹp Tech Debt đặt tên hàm (Đổi escapeMarkdown thành escapeHtml).
+
+3. **Đồng bộ hóa Tài liệu (OKF v0.1)**
+   - Cập nhật chuẩn Open Knowledge Format (YAML Frontmatter) cho hệ thống tài liệu.
+   - Bổ sung `docs/index.md` làm Knowledge Index.
 
 ## Đợt Refactor 1 (Mới nhất)
 **Mục tiêu**: Khắc phục lỗi biên dịch TypeScript, chuẩn hóa luồng xử lý Telegram webhook, quản lý state cho Serverless và cải thiện UX (Notion Deep link, HTML Escape).

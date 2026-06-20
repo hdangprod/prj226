@@ -1,5 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
-import type { PlannedTask } from './taskService';
+import type { PlannedTask } from '../skills/WeeklyPlanningSkill';
 import type { TaskInput } from '../notion/types';
 
 const DB_PLAN_DRAFTS = 'plan_drafts';
