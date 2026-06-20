@@ -22,6 +22,7 @@ Tài liệu này ghi chú lại các đợt refactor và thay đổi cấu trúc
    - Định nghĩa `AgentSkill` interface (abstract layer cho mọi kỹ năng của hệ thống).
    - Tách toàn bộ logic nghiệp vụ (NLP parsing, prefix generation, Firestore state) của tính năng lập kế hoạch tuần (`/plan_week`) thành `WeeklyPlanningSkill.ts`.
    - Biến đổi `router.ts` thành Thin Router, chỉ chịu trách nhiệm nhận/trả request thay vì gánh vác logic.
+   - Bổ sung Error Boundary cho Kỹ năng lập kế hoạch tuần, tối ưu hiển thị Fallback Project cho tính năng Preview, và dọn dẹp Tech Debt đặt tên hàm (Đổi escapeMarkdown thành escapeHtml).
 
 3. **Đồng bộ hóa Tài liệu (OKF v0.1)**
    - Cập nhật chuẩn Open Knowledge Format (YAML Frontmatter) cho hệ thống tài liệu.

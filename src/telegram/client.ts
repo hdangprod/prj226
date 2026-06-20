@@ -10,7 +10,7 @@ export interface InlineKeyboardMarkup {
  * Escape special characters for Telegram HTML parse mode.
  * Characters that must be escaped: & < >
  */
-export function escapeMarkdown(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

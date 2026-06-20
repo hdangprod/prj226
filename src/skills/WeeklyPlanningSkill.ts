@@ -1,5 +1,6 @@
 import { AgentSkill } from './base';
 import { parseWeeklyPlan } from '../gemini/client';
+import { BOT_MESSAGES } from '../constants/messages';
 import { findProjectByName, countTasksInProject } from '../notion/client';
 import { saveDraft } from '../services/stateManager';
 import type { GeminiTaskOutput } from '../notion/types';
@@ -29,7 +30,13 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
   description = 'Phân tích văn bản thành các task, tự động gán prefix theo project, và lưu nháp vào Firestore.';
 
   async execute(input: WeeklyPlanningInput): Promise<WeeklyPlanningOutput> {
-    const parsed = await parseWeeklyPlan(input.text, input.today);
+    let parsed: GeminiTaskOutput[];
+    try {
+      parsed = await parseWeeklyPlan(input.text, input.today);
+    } catch (error) {
+      throw new Error(BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT);
+    }
+
     const drafts: PlannedTask[] = [];
 
     for (const t of parsed) {
@@ -43,6 +50,8 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
           const existingCount = await countTasksInProject(project.id);
           const currentBatchCount = drafts.filter((r) => r.projectId === project.id).length;
           prefix = `${t.projectName}_T${existingCount + currentBatchCount + 1}: `;
+        } else {
+          prefix = `[New Project] ${t.projectName}_T1: `;
         }
       }
       
