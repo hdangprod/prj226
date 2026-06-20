@@ -21,6 +21,15 @@ Hệ thống kết nối với 5 databases với cấu trúc (lưu ý cột Stat
 - **Areas**: `Name` (Title), `Projects` (Relation), `Resources` (Relation).
 - **Resources**: `Name` (Title), `URL` (URL), `Area` (Relation).
 
+## Architecture & Data Flow
+Hệ thống được thiết kế theo kiến trúc Serverless với luồng dữ liệu End-to-End như sau:
+
+1. **Telegram Webhook**: Điểm tiếp nhận request từ người dùng.
+2. **GCP Cloud Run (Functions Framework)**: Nơi xử lý logic nghiệp vụ. Do bản chất là môi trường Stateless (không lưu trạng thái giữa các request), hệ thống cần một tầng đệm trung gian.
+3. **GCP Firestore (Native Mode) - State Management Layer**: Đóng vai trò là **State Buffer (Tầng đệm quản lý trạng thái)** nằm giữa Telegram Webhook và Notion API. Firestore chịu trách nhiệm lưu trữ tạm thời các bản nháp (drafts) và phiên hội thoại (user sessions) để chuyển đổi tính chất Stateless của Cloud Run thành Stateful. Điều này là cốt lõi để chuẩn bị cho các luồng duyệt kế hoạch tuần (`plan_week`) hoặc tạo task hội thoại nhiều bước.
+4. **Gemini API**: Trí tuệ nhân tạo đảm nhiệm bóc tách và phân loại dữ liệu (NLP).
+5. **Notion API**: Hệ thống lưu trữ dữ liệu vĩnh viễn (Second Brain).
+
 ## Multi-Model Routing Architecture (Cost & Performance Optimization)
 To optimize operational costs while maintaining high-quality reasoning, the system employs a dual-model routing strategy. Tier names are conceptual; the concrete model for each tier is **env-driven** (`GEMINI_MODEL_LITE` / `GEMINI_MODEL_PRO`) so models can be swapped without code changes:
 1. **Lightweight Tier (`MODELS.LITE`)**: Used for high-frequency, structured, and deterministic NLP tasks (e.g., Parsing commands, extracting task details, content translation, and Focus Rescue filtering).

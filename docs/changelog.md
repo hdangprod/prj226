@@ -32,3 +32,31 @@ Tài liệu này ghi chú lại các đợt refactor và thay đổi cấu trúc
 6. **Fix lỗi Telegram Parse Mode (HTML)**
    - Thay vì dùng `Markdown` (gặp lỗi 400 Bad Request nếu nội dung chứa các ký tự không được đóng mở đúng), hệ thống đã chuyển sang dùng `HTML` parse_mode (`src/telegram/client.ts`).
    - Bổ sung hàm `escapeMarkdown()` để tự động encode các ký tự đặc biệt (`&`, `<`, `>`) nhằm đảm bảo tin nhắn gửi lên Telegram luôn hợp lệ.
+
+## Bài học Kinh nghiệm Vận hành (DevOps & GCP Infrastructure)
+
+**1. Lỗi PORT 8080 Timeout khi khởi động**
+- **Nguyên nhân**: Hàm `validateEnv()` trong `src/config.ts` văng lỗi (crash) khi thiếu cấu hình biến môi trường trên đám mây, dẫn đến container bị sập.
+- **Giải pháp**: Cần nạp đầy đủ các biến môi trường thông qua cờ `--set-env-vars` tại lệnh deploy trên Cloud Run.
+
+**2. Tiêu chuẩn cấu hình Firestore Instance**
+- **Standard Edition**: Dùng phiên bản này để tận dụng gói Always Free và tính năng Automatic Indexing.
+- **Native Mode**: Bắt buộc để khớp hoàn toàn với SDK Node.js (`@google-cloud/firestore`).
+- **Region cố định (`asia-southeast1`)**: Phải chọn khu vực Singapore để ép độ trễ (latency) <10ms thay vì chọn Multi-region ở Mỹ.
+
+**3. Cơ chế ID Database ngầm định**
+- Việc khởi tạo client bằng cú pháp `new Firestore()` (để trống tham số) trong file `stateManager.ts` bắt buộc ID database trên giao diện UI GCP phải là `(default)`. Nếu đặt tên khác sẽ vướng lỗi `5 NOT_FOUND`.
+
+**4. Bẫy định danh Runtime & Lỗi 7 PERMISSION_DENIED**
+Để khắc phục triệt để lỗi không có quyền đọc/ghi Firestore trên Cloud Run, cần thực hiện chuẩn xác 2 bước sau:
+
+*Bước 1: Check danh tính thật*
+- Vào **Cloud Run** -> tab **Revisions** -> chọn revision mới nhất.
+- Ở bảng phụ bên phải, chọn tab **Security**.
+- Tìm dòng **Service Account** để lấy địa chỉ email thực tế đang chạy (Ví dụ: một email đuôi `@appspot.gserviceaccount.com`).
+
+*Bước 2: Cấp quyền kiểu mới*
+- Vào menu **IAM & Admin** -> **IAM**.
+- Bấm nút **GRANT ACCESS** (nút giao diện mới thay thế cho nút ADD).
+- Dán địa chỉ email vừa lấy vào.
+- Cấp role chuyên biệt cho Data Plane: Chọn **Firebase Firestore Admin** (hoặc **Cloud Datastore User**) để thông ống quyền ghi/đọc.

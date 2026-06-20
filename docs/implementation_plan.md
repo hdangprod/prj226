@@ -34,23 +34,23 @@ This plan outlines the complete rebuild of the Telegram Bot combined with Gemini
 ### Component 1: Config and Global Setup
 Validate environment parameters and provide standard typed configs.
 
-#### [NEW] [config.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/config.ts)
-- Load environment variables from `.env` using `dotenv`.
-- Export a validated configuration object (`NOTION_TOKEN`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, database IDs). Raise an descriptive error if any required variables are missing.
+#### [x] Done [config.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/config.ts)
+- [x] Done: Load environment variables from `.env` using `dotenv`.
+- [x] Done: Export a validated configuration object (`NOTION_TOKEN`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, database IDs). Raise an descriptive error if any required variables are missing.
 
 ---
 
 ### Component 2: Notion API Client
 Encapsulate all queries, block retrievals, page creation, and updates.
 
-#### [NEW] [types.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/notion/types.ts)
-- Define TypeScript interfaces for Tasks, Projects, Daily Logs, Areas, and Resources.
-- Define Task status enum to strictly type: `Not Started`, `On Hold`, `In Progress`, `Done`, `Archived`.
+#### [x] Done [types.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/notion/types.ts)
+- [x] Done: Define TypeScript interfaces for Tasks, Projects, Daily Logs, Areas, and Resources.
+- [x] Done: Define Task status enum to strictly type: `Not Started`, `On Hold`, `In Progress`, `Done`, `Archived`.
 
-#### [NEW] [client.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/notion/client.ts)
-- Instantiate `@notionhq/client`.
-- Implement `findOrCreateDailyLog(dateStr: string)`: looks up `Daily Logs` DB by name/title (`YYYY-MM-DD`). If not found, creates a new log page.
-- Implement `addTask(task: TaskInput, projectId?: string, dailyLogId?: string)`: creates task page and appends checklist items as `to_do` blocks.
+#### [x] Done [client.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/notion/client.ts)
+- [x] Done: Instantiate `@notionhq/client`.
+- [x] Done: Implement `findOrCreateDailyLog(dateStr: string)`: looks up `Daily Logs` DB by name/title (`YYYY-MM-DD`). If not found, creates a new log page.
+- [x] Done: Implement `addTask(task: TaskInput, projectId?: string, dailyLogId?: string)`: creates task page and appends checklist items as `to_do` blocks.
 - Implement `getTaskWithChecklist(taskId: string)`: fetches Task properties and retrieves child blocks to audit unchecked `to_do` elements.
 - Implement `completeTask(taskId: string)`: updates Task status/property to Done.
 - Implement `updateTaskEstimate(taskId: string, newEstimate: number)`: updates the Estimate property.
@@ -67,9 +67,9 @@ Encapsulate all queries, block retrievals, page creation, and updates.
 ### Component 3: Gemini API Wrapper
 Manage natural language parsing and performance summaries.
 
-#### [NEW] [client.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/gemini/client.ts)
-- Configure Gemini SDK (`gemini-2.5` or `gemini-1.5-pro` as appropriate).
-- Implement `parseTaskInput(text: string, projects: any[])`: parses natural language input into JSON containing task name, matching project ID, priority, estimate, and checklist subtasks.
+#### [x] Done [client.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/gemini/client.ts)
+- [x] Done: Configure Gemini SDK (`gemini-2.5` or `gemini-1.5-pro` as appropriate).
+- [x] Done: Implement `parseTaskInput(text: string, projects: any[])`: parses natural language input into JSON containing task name, matching project ID, priority, estimate, and checklist subtasks.
 - Implement `classifyResource(title: string, url: string, areas: any[])`: matches a resource name to the most appropriate Area ID.
 - Implement `translateHighlight(text: string)`: translates highlight text to professional-grade English.
 - Implement `classifyDiscoveryDelivery(taskNames: string[])`: classifies a list of tasks into Discovery vs Delivery.
@@ -79,25 +79,25 @@ Manage natural language parsing and performance summaries.
 ### Component 4: Telegram Webhook Routing & Client
 Manage message dispatch, inline keyboards, and request routing.
 
-#### [NEW] [client.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/telegram/client.ts)
-- Implement `sendMessage(chatId: number, text: string, replyMarkup?: any)`: helper to post messages or inline buttons.
-- Implement `editMessageText(chatId: number, messageId: number, text: string, replyMarkup?: any)`: updates messages to show task completion status.
-- Implement `answerCallbackQuery(callbackQueryId: string)`: acknowledges inline keyboard interactions.
+#### [x] Done [client.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/telegram/client.ts)
+- [x] Done: Implement `sendMessage(chatId: number, text: string, replyMarkup?: any)`: helper to post messages or inline buttons.
+- [x] Done: Implement `editMessageText(chatId: number, messageId: number, text: string, replyMarkup?: any)`: updates messages to show task completion status.
+- [x] Done: Implement `answerCallbackQuery(callbackQueryId: string)`: acknowledges inline keyboard interactions.
 
-#### [MODIFY] [index.ts](file:///Users/dangnguyen/Desktop/PRJ226/index.ts)
-- Overwrite to act as the primary route handler for the GCP Functions Framework webhook.
-- Match incoming payloads:
+#### [x] Done [index.ts](file:///Users/dangnguyen/Desktop/PRJ226/index.ts)
+- [x] Done: Overwrite to act as the primary route handler for the GCP Functions Framework webhook.
+- [x] Done: Match incoming payloads:
   - Callback queries: `complete_<id>` or `defer_<id>`.
   - Commands: `/start`, `/view_task`, `/rescue`, `/highlight <text>`, `/weekly_report`, or raw task text.
-  - Route resource saving: If the input contains a URL, trigger Resource saving logic.
+- [x] Done: Route resource saving: If the input contains a URL, trigger Resource saving logic.
 
 ---
 
 ### Component 5: Business Logic Services
 Coordinate task execution, rollover, rescue recommendations, and retrospect summaries.
 
-#### [NEW] [taskService.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/services/taskService.ts)
-- Coordinate task creation, mapping to projects and logs.
+#### [x] Done [taskService.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/services/taskService.ts)
+- [x] Done: Coordinate task creation, mapping to projects and logs.
 - Implement rollover logic: Audit child blocks of the task, compute 50% estimate adjustment, set original task status, and clone the rollover task for tomorrow.
 - Implement `rescueTask()`: Query today's tasks, search for one task with `Priority: High` and `Estimate <= 0.5` hours, and recommend it.
 
