@@ -1,3 +1,10 @@
+---
+title: "Spec: Telegram Bot Notion Second Brain Orchestrator"
+version: 1.1.0
+date: 2026-06-20
+type: specification
+---
+
 # Spec: Telegram Bot Notion Second Brain Orchestrator
 
 ## Objective
@@ -44,7 +51,10 @@ To optimize operational costs while maintaining high-quality reasoning, the syst
 > **Telegram Commands**: `/add_task`, `/view_task`, `/rescue`, `/highlight`, `/plan_week`, `/weekly_report`. Lệnh `/plan_week <text>` (FR-7) cho phép lập kế hoạch tuần bằng ngôn ngữ tự nhiên để tạo hàng loạt task.
 
 ## Project Structure
-```
+```text
+.agents/
+├── rules/                  → Quy tắc ràng buộc kỹ thuật (vd: notion-limits)
+└── workflows/              → Quy trình kiểm tra hệ thống (vd: deploy-check)
 src/
 ├── index.ts                → HTTP Webhook entry point (Google Cloud Function)
 ├── config.ts               → Environment variable validation, global config & Model Tier definitions
@@ -55,11 +65,14 @@ src/
 │     └── client.ts         → Gemini API NLP processor (Handles dynamic model selection)
 ├── telegram/
 │     └── client.ts         → Telegram Bot API helper (SendMessage, EditMessage)
-└── services/
-      ├── taskService.ts    → Business logic for tasks (Decomposition, Rollover, Prefix Generation)
-      ├── reportService.ts  → Business logic for weekly performance reports (Metrics calculation)
-      ├── stateManager.ts   → Firestore state management for draft plans
-      └── highlightService.ts → Daily Highlight logic
+├── skills/
+│     ├── base.ts           → Interface AgentSkill
+│     └── WeeklyPlanningSkill.ts → Đóng gói logic nghiệp vụ cho lệnh /plan_week
+├── services/
+│     ├── taskService.ts    → Business logic cho Tasks
+│     ├── reportService.ts  → Business logic cho Weekly performance reports (Metrics calculation)
+│     ├── stateManager.ts   → Firestore state management for draft plans
+│     └── highlightService.ts → Daily Highlight logic
 tests/
 └── localTest.ts            → Local harness to simulate API payloads and flow execution
 docs/

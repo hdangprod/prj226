@@ -5,10 +5,9 @@ import {
   completeTask,
   getTaskById,
   getTodayTaskPages,
-  planWeekDraft,
   bulkCreateTasks,
 } from './services/taskService';
-import type { PlannedTask } from './services/taskService';
+import { WeeklyPlanningSkill, type PlannedTask } from './skills/WeeklyPlanningSkill';
 import { updateHighlight } from './services/highlightService';
 import { generateWeeklyReport } from './services/reportService';
 import { 
@@ -40,9 +39,6 @@ function notionDeepLink(pageId: string): string {
   return `notion://notion.so/${pageId.replace(/-/g, '')}`;
 }
 
-function newDraftId(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 function formatPlanPreview(drafts: PlannedTask[]): string {
   const lines: string[] = [`🗓 <b>Weekly Plan Preview</b> (${drafts.length} tasks)\n`];
@@ -348,12 +344,13 @@ export async function handleUpdate(body: unknown): Promise<void> {
         );
       } else {
         await sendMessage(chatId, '⏳ Analyzing your weekly plan...');
-        const drafts = await planWeekDraft(input, today);
+        
+        const skill = new WeeklyPlanningSkill();
+        const { draftId, drafts } = await skill.execute({ text: input, today });
+        
         if (drafts.length === 0) {
           await sendMessage(chatId, '🤔 Không thể bóc tách được task nào. Hãy thử mô tả chi tiết hơn.');
         } else {
-          const draftId = newDraftId();
-          await saveDraft(draftId, drafts);
           await sendMessage(chatId, formatPlanPreview(drafts), {
             inline_keyboard: [
               [
