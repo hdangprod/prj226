@@ -38,7 +38,7 @@ interface TelegramUpdate {
 // ─── Helpers ───
 
 function notionDeepLink(pageId: string): string {
-  return `notion://notion.so/${pageId.replace(/-/g, '')}`;
+  return `https://notion.so/${pageId.replace(/-/g, '')}`;
 }
 
 
