@@ -197,13 +197,27 @@ export async function fetchActiveProjects(): Promise<{ id: string; name: string 
   }));
 }
 
-export async function createProject(name: string): Promise<{ id: string; name: string }> {
+export async function fetchAreas(): Promise<{ id: string; name: string }[]> {
+  const response = await notion.databases.query({
+    database_id: config.NOTION_AREAS_DB_ID,
+  });
+  return (response.results as NotionPage[]).map((p) => ({
+    id: p.id,
+    name: getTitle(p),
+  }));
+}
+
+export async function createProject(name: string, areaId?: string): Promise<{ id: string; name: string }> {
+  const properties: Record<string, unknown> = {
+    Name: { title: [{ text: { content: name } }] },
+    Status: { select: { name: 'Active' } },
+  };
+  if (areaId) {
+    properties['Area'] = { relation: [{ id: areaId }] };
+  }
   const newPage = await notion.pages.create({
     parent: { database_id: config.NOTION_PROJECTS_DB_ID },
-    properties: {
-      Name: { title: [{ text: { content: name } }] },
-      Status: { select: { name: 'Active' } },
-    },
+    properties: properties as any,
   });
   return { id: newPage.id, name };
 }
@@ -260,7 +274,10 @@ export async function getOrCreateDailyLog(dateStr: string): Promise<DailyLogPage
   }
   const newPage = await notion.pages.create({
     parent: { database_id: config.NOTION_DAILY_LOGS_DB_ID },
-    properties: { Name: { title: [{ text: { content: dateStr } }] } },
+    properties: {
+      Name: { title: [{ text: { content: dateStr } }] },
+      Date: { date: { start: dateStr } },
+    },
   });
   return { id: newPage.id, title: dateStr };
 }

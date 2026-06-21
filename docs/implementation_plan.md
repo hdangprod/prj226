@@ -129,3 +129,37 @@ npm test
 6. Click `[⏳ Defer]` on a task, verify the estimate is cut in half, status is Done, and a new `[Rollover]` task is created for tomorrow with remaining checklist items.
 7. Send a URL (e.g., `https://example.com/notion-api-guide`), verify resource is parsed, matched to an Area, and saved.
 8. Send `/weekly_report` and verify metric outputs.
+
+---
+
+## Refactor: `/add_task` Command Flow & Notion Database Relations
+
+This section outlines the plan to address UX bugs and missing Notion relations in the `/add_task` command. This will be implemented in two distinct phases:
+
+### Phase 1: Implement Notion Data Architecture and Relational Mapping
+*Target Issue: #7*
+
+**1. Configuration (`src/config.ts` & `.env`)**
+- Add `NOTION_AREAS_DB_ID` to manage relations with the Areas database.
+
+**2. Notion Client Extensions (`src/notion/client.ts`)**
+- **[NEW] `fetchAreas()`**: Queries the Areas DB to retrieve the list of `id` and `name`.
+- **[MODIFY] `createProject(name, areaId)`**: Updates the Notion page creation payload to include the `Area` relation:
+  `{ Area: { relation: [{ id: areaId }] } }`
+- **[MODIFY] `createTask(...)`**: Ensures the `Date` property is accurately populated from `dueDate` (YYYY-MM-DD format).
+- **[MODIFY] `getOrCreateDailyLog(today)`**: Updates the payload to correctly assign the `Date` property (as a Notion Date type) and prepares the `Highlight` field.
+
+### Phase 2: Refactor Telegram Multi-turn State Machine and UX Flow
+*Target Issue: #8*
+
+**1. State Management (`src/services/stateManager.ts`)**
+- Extend `UserSession` states to include:
+  - `AWAITING_PROJECT_EXISTENCE_CHECK` (Yes/No if task belongs to existing project)
+  - `AWAITING_PROJECT_SELECTION` (Select existing project)
+  - `AWAITING_NEW_PROJECT_NAME` (Input new project name)
+  - `AWAITING_AREA_SELECTION` (Select area for new project)
+
+**2. Router Logic (`src/router.ts`)**
+- Implement `if/else` control structures to map Callback Queries (`addtask_yes`, `addtask_no`, `area_<id>`) to their respective state transitions.
+- Fetch and display the list of Areas using Inline Keyboards.
+- Eliminate hardcoded strings by adding new prompts and success messages to `src/constants/messages.ts` (e.g., `BOT_MESSAGES.PROMPTS.ASK_PROJECT_EXISTENCE`, `BOT_MESSAGES.SUCCESS.TASK_CREATED_WITH_PROJECT`).
