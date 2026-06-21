@@ -15,6 +15,7 @@ import {
   getOrCreateDailyLog, 
   queryTasksByProject, 
   fetchActiveProjects, 
+  fetchAreas,
   createProject, 
   createTask 
 } from './notion/client';
@@ -187,7 +188,37 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await editMessageText(
           chatId,
           message.message_id,
-          BOT_MESSAGES.PROMPTS.NO_PROJECT_PROMPT
+          BOT_MESSAGES.PROMPTS.ENTER_PROJECT_NAME
+        );
+
+      } else if (action === 'addtask_area') {
+        // payloadStr = areaId
+        const session = await loadSession(chatId);
+        if (!session || session.state !== 'AWAITING_AREA_SELECTION' || !session.pendingProjectName) {
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
+          return;
+        }
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
+
+        // Retrieve the area name for the success message
+        const areas = await fetchAreas();
+        const selectedArea = areas.find(a => a.id === payloadStr);
+        const areaName = selectedArea ? selectedArea.name : 'Unknown';
+
+        const newProj = await createProject(session.pendingProjectName, payloadStr);
+        session.taskInput.projectName = newProj.name;
+
+        const dailyLog = await getOrCreateDailyLog(getTodayStr());
+        const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
+        const deepLink = notionDeepLink(taskId);
+
+        await deleteSession(chatId);
+
+        await editMessageText(
+          chatId,
+          message.message_id,
+          BOT_MESSAGES.SUCCESS.TASK_CREATED_FULL(escapeHtml(newProj.name), escapeHtml(areaName)),
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
         );
       }
     } catch (err: unknown) {
@@ -208,29 +239,43 @@ export async function handleUpdate(body: unknown): Promise<void> {
   try {
     // Check conversational state first
     const session = await loadSession(chatId);
+
+    // Handle AWAITING_AREA_SELECTION — abort if user types a command
+    if (session && session.state === 'AWAITING_AREA_SELECTION') {
+      if (text.startsWith('/')) {
+        await deleteSession(chatId);
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
+      } else {
+        // Ignore non-command text while waiting for area button click
+        return;
+      }
+    }
+
+    // Handle AWAITING_PROJECT_NAME — user types project name
     if (session && session.state === 'AWAITING_PROJECT_NAME') {
       if (text.startsWith('/')) {
         // Abort session if user types a command
         await deleteSession(chatId);
         await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
       } else {
-        await sendMessage(chatId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
         const projectName = text;
-        const newProj = await createProject(projectName);
-        
-        // Update taskInput to ensure the new project's name is used as prefix
-        session.taskInput.projectName = newProj.name;
+        const areas = await fetchAreas();
 
-        const dailyLog = await getOrCreateDailyLog(today);
-        const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
-        const deepLink = notionDeepLink(taskId);
+        // Save project name and transition to area selection
+        session.state = 'AWAITING_AREA_SELECTION';
+        session.pendingProjectName = projectName;
+        await saveSession(chatId, session);
 
-        await deleteSession(chatId);
+        // Build inline keyboard for areas
+        const keyboard: any[][] = [];
+        for (const area of areas) {
+          keyboard.push([{ text: `🏷 ${area.name}`, callback_data: `addtask_area:${area.id}` }]);
+        }
 
         await sendMessage(
           chatId,
-          BOT_MESSAGES.SUCCESS.PROJECT_CREATED(escapeHtml(newProj.name)),
-          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
+          BOT_MESSAGES.PROMPTS.CHOOSE_AREA(escapeHtml(projectName)),
+          { inline_keyboard: keyboard }
         );
         return;
       }
