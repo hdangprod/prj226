@@ -187,9 +187,10 @@ export async function findProjectByName(
 }
 
 export async function fetchActiveProjects(): Promise<{ id: string; name: string }[]> {
+  // Notion 'Status' property type uses 'status' filter, not 'select'
   const response = await notion.databases.query({
     database_id: config.NOTION_PROJECTS_DB_ID,
-    filter: { property: 'Status', select: { equals: 'Active' } },
+    filter: { property: 'Status', status: { equals: 'Active' } },
   });
   return (response.results as NotionPage[]).map((p) => ({
     id: p.id,
@@ -210,7 +211,7 @@ export async function fetchAreas(): Promise<{ id: string; name: string }[]> {
 export async function createProject(name: string, areaId?: string): Promise<{ id: string; name: string }> {
   const properties: Record<string, unknown> = {
     Name: { title: [{ text: { content: name } }] },
-    Status: { select: { name: 'Active' } },
+    Status: { status: { name: 'Active' } },
   };
   if (areaId) {
     properties['Area'] = { relation: [{ id: areaId }] };

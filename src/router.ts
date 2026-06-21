@@ -224,6 +224,9 @@ export async function handleUpdate(body: unknown): Promise<void> {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error('[Router CB] Error:', errMsg);
+      try {
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errMsg)));
+      } catch { /* best-effort error reporting */ }
     }
     return;
   }
