@@ -214,9 +214,16 @@ export async function handleUpdate(body: unknown): Promise<void> {
 
         await deleteSession(chatId);
 
-        await editMessageText(
+        try {
+          // Try to remove keyboard from previous message
+          await editMessageText(chatId, message.message_id, BOT_MESSAGES.PROMPTS.CHOOSE_AREA(escapeHtml(newProj.name)));
+        } catch (e) {
+          console.error('Failed to remove inline keyboard:', e);
+        }
+
+        // Send success as a new message
+        await sendMessage(
           chatId,
-          message.message_id,
           BOT_MESSAGES.SUCCESS.TASK_CREATED_FULL(escapeHtml(newProj.name), escapeHtml(areaName)),
           { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
         );
@@ -249,7 +256,34 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await deleteSession(chatId);
         await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
       } else {
-        // Ignore non-command text while waiting for area button click
+        // Try to match area name from user text
+        const areas = await fetchAreas();
+        const matchedArea = areas.find(a => a.name.toLowerCase() === text.toLowerCase());
+        if (matchedArea) {
+          // Execute same logic as callback
+          const newProj = await createProject(session.pendingProjectName!, matchedArea.id);
+          session.taskInput.projectName = newProj.name;
+
+          await sendMessage(chatId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
+          
+          const dailyLog = await getOrCreateDailyLog(getTodayStr());
+          const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
+          const deepLink = notionDeepLink(taskId);
+
+          await deleteSession(chatId);
+
+          await sendMessage(
+            chatId,
+            BOT_MESSAGES.SUCCESS.TASK_CREATED_FULL(escapeHtml(newProj.name), escapeHtml(matchedArea.name)),
+            { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
+          );
+        } else {
+          // Send a hint message
+          await sendMessage(
+            chatId,
+            `Vui lòng click vào các nút ở trên hoặc gõ chính xác tên Area (ví dụ: Finance, Workplace) để tiếp tục.`
+          );
+        }
         return;
       }
     }
