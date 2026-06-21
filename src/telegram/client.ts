@@ -27,6 +27,7 @@ async function handleResponse(response: Response, label: string): Promise<any> {
 
   if (!response.ok) {
     console.error(`[Telegram] ${label} failed:`, JSON.stringify(body));
+    throw new Error(`[Telegram] ${label} failed: ${JSON.stringify(body)}`);
   }
 
   return body;
