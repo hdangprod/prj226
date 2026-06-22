@@ -25,10 +25,10 @@ Trừ khi User nói rõ "không cần tạo issue/không cần theo workflow", A
 - **Commit Message**: Bắt buộc tuân thủ Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`):
    - Cú pháp: `<type>(<scope>): <description> (#<issue_number>)`
    - Ví dụ: `feat(notion): add auto-prefixing logic to task creation (#12)`
-- **Definition of Done (DoD)**: PR chỉ được duyệt (Merge) sau khi đáp ứng đủ 3 tiêu chí:
-   1. Pass toàn bộ automated checks (chạy `npm run build` thành công).
-   2. Có kèm ít nhất 1 bài unit test cho logic mới.
-   3. Cập nhật tài liệu liên quan nếu có (vd: `docs/troubleshooting.md`).
+- **Definition of Done (DoD)**: Một tính năng được gọi là "Done" khi:
+   1. Code chạy đúng spec, không bug.
+   2. Đã viết Unit Test bao phủ.
+   3. Đã cập nhật tài liệu (API Docs, README hoặc hệ thống Notion của bạn) nếu có thay đổi về kiến trúc.
 - **Đóng Issue**: Việc đóng Issue sẽ do GitHub tự động thực hiện khi User merge PR, AI không cần dùng lệnh `gh issue close` trừ khi được yêu cầu đặc biệt.
 
 ## Boundaries (Ranh giới hành vi)
