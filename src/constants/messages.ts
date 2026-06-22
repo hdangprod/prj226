@@ -9,6 +9,7 @@ export const BOT_MESSAGES = {
     TASK_ANALYZED: (name: string) => `✅ Phân tích xong: <b>${name}</b>`,
     NO_PENDING_TASKS: '🎉 Hôm nay không còn task chưa hoàn thành!',
     HIGHLIGHT_UPDATED: '📝 Daily Log highlight updated!',
+    BOOKMARK_SAVED: (title: string, areaName: string) => `✅ Đã lưu Bookmark: <b>${title}</b> vào Area <b>${areaName}</b>.`,
   },
   ERRORS: {
     SOMETHING_WENT_WRONG: (msg: string) => `❌ Something went wrong: ${msg}`,
@@ -38,6 +39,7 @@ export const BOT_MESSAGES = {
     NO_PROJECT_PROMPT: 'Hiện tại chưa có Project nào. Vui lòng nhập mã/tên cho Project mới (vd: PRJ226):',
     FOCUS_RESCUE_TITLE: '⚡ <b>FOCUS RESCUE</b> ⚡',
     FOCUS_RESCUE_FOOTER: '👉 Bắt đầu ngay 25 phút Pomodoro!',
+    SAVING_BOOKMARK: '⏳ Đang phân tích và lưu Bookmark...',
   },
   BUTTONS: {
     OPEN_ROLLOVER: '📂 Mở Rollover Task',
