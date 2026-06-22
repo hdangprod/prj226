@@ -37,7 +37,8 @@ function getRelationId(page: NotionPage, prop: string): string | undefined {
 export async function createTask(
   task: TaskInput,
   projectId?: string,
-  dailyLogId?: string
+  dailyLogId?: string,
+  overrideChecklist?: { text: string; checked: boolean }[]
 ): Promise<string> {
   let taskPrefix = '';
   if (projectId) {
@@ -83,7 +84,18 @@ export async function createTask(
   }
 
   // Checklist to_do blocks
-  if (task.checklist.length > 0) {
+  if (overrideChecklist && overrideChecklist.length > 0) {
+    for (const item of overrideChecklist) {
+      children.push({
+        object: 'block',
+        type: 'to_do',
+        to_do: {
+          rich_text: [{ type: 'text', text: { content: item.text } }],
+          checked: item.checked,
+        },
+      });
+    }
+  } else if (task.checklist.length > 0) {
     for (const item of task.checklist) {
       children.push({
         object: 'block',
@@ -249,7 +261,7 @@ export async function queryTasksByProject(
 
 export async function updateTaskStatus(
   pageId: string,
-  status: 'Not Started' | 'On Hold' | 'In Progress' | 'Done' | 'Archived'
+  status: 'Not Started' | 'On Hold' | 'In Progress' | 'Done' | 'Archived' | 'Deferred'
 ): Promise<void> {
   await notion.pages.update({
     page_id: pageId,

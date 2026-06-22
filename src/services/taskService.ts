@@ -88,24 +88,28 @@ export async function completeTask(taskId: string): Promise<void> {
 
 export async function rolloverTask(
   task: TaskPage,
-  tomorrowStr: string
+  tomorrowStr: string,
+  spentHours?: number
 ): Promise<string> {
-  const newEstimate = task.estimate / 2;
-  await updateTaskEstimate(task.id, newEstimate);
-  await updateTaskStatus(task.id, 'Done');
+  let newEstimate = task.estimate / 2;
+  if (spentHours !== undefined && !isNaN(spentHours)) {
+    newEstimate = Math.max(0, task.estimate - spentHours);
+  }
 
-  const uncheckedItems = task.checklistBlocks.filter((b) => !b.checked).map((b) => b.text);
+  // Update old task
+  await updateTaskEstimate(task.id, spentHours !== undefined && !isNaN(spentHours) ? spentHours : task.estimate / 2);
+  await updateTaskStatus(task.id, 'Deferred');
 
   const newTaskInput: TaskInput = {
     name: `[Rollover] ${task.name}`,
     priority: task.priority,
     estimate: newEstimate,
     dueDate: tomorrowStr,
-    checklist: uncheckedItems,
+    checklist: [], // handled by overrideChecklist
   };
 
   const dailyLog = await getOrCreateDailyLog(tomorrowStr);
-  const newId = await createTask(newTaskInput, task.projectId, dailyLog.id);
+  const newId = await createTask(newTaskInput, task.projectId, dailyLog.id, task.checklistBlocks);
   return newId;
 }
 
