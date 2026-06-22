@@ -17,10 +17,11 @@ import {
   fetchActiveProjects, 
   fetchAreas,
   createProject, 
-  createTask 
+  createTask,
+  addResource
 } from './notion/client';
 import { saveDraft, loadDraft, deleteDraft, saveSession, loadSession, deleteSession } from './services/stateManager';
-import { parseTaskInput } from './gemini/client';
+import { parseTaskInput, classifyResource } from './gemini/client';
 
 interface TelegramUpdate {
   message?: {
@@ -452,6 +453,28 @@ export async function handleUpdate(body: unknown): Promise<void> {
       const report = await generateWeeklyReport();
       await sendMessage(chatId, report);
 
+    // Handle URL saving (Bookmark)
+    } else if (text.startsWith('http://') || text.startsWith('https://')) {
+      const urlMatches = text.match(/(https?:\/\/[^\s]+)/g);
+      if (urlMatches && urlMatches.length > 0) {
+        const url = urlMatches[0];
+        
+        await sendMessage(chatId, BOT_MESSAGES.PROMPTS.SAVING_BOOKMARK);
+        
+        const areas = await fetchAreas();
+        const { title, areaId } = await classifyResource(url, areas);
+        
+        const resourceId = await addResource(title, url, areaId);
+        const areaName = areas.find(a => a.id === areaId)?.name || 'Unknown';
+        const deepLink = notionDeepLink(resourceId);
+        
+        await sendMessage(
+          chatId,
+          BOT_MESSAGES.SUCCESS.BOOKMARK_SAVED(escapeHtml(title), escapeHtml(areaName)),
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
+        );
+      }
+      
     // Unknown command
     } else {
       await sendMessage(
