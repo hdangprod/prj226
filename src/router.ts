@@ -419,7 +419,17 @@ export async function handleUpdate(body: unknown): Promise<void> {
             const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
             projectInfo = ` (Tiến độ: ${pct}%)`;
           }
-          const msg = `<b>${escapeHtml(t.name)}</b>\nPriority: ${t.priority} | Est: ${t.estimate}h${projectInfo}`;
+          const timeStr = t.dueDate && t.dueDate.includes('T') ? (() => {
+            const d = new Date(t.dueDate);
+            let h = d.getHours();
+            const m = d.getMinutes();
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            const mStr = m < 10 ? '0' + m : m;
+            return `🕒 ${h}:${mStr} ${ampm} | `;
+          })() : '';
+          const deepLink = notionDeepLink(t.id);
+          const msg = `<b><a href="${deepLink}">${escapeHtml(t.name)}</a></b>\n${timeStr}Priority: ${t.priority} | Est: ${t.estimate}h${projectInfo}`;
           await sendMessage(chatId, msg, {
             inline_keyboard: [
               [
