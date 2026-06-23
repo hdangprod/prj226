@@ -406,8 +406,8 @@ export async function handleUpdate(body: unknown): Promise<void> {
         );
       }
 
-    // /view_task
-    } else if (text.startsWith('/view_task') || text.startsWith('/tasks')) {
+    // /today
+    } else if (text.startsWith('/today') || text.startsWith('/tasks')) {
       const tasks = await getTodayTaskPages(today);
       if (tasks.length === 0) {
         await sendMessage(chatId, BOT_MESSAGES.SUCCESS.NO_PENDING_TASKS);

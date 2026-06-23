@@ -17,14 +17,14 @@ export const BOT_MESSAGES = {
     SESSION_EXPIRED: 'Session expired.',
     PLAN_CANCELLED: '❌ Plan cancelled. Nothing was created.',
     NO_TASK_FOUND: '🤔 Không thể bóc tách được task nào. Hãy thử mô tả chi tiết hơn.',
-    NO_HIGH_PRIORITY_TASK: '💡 Không tìm thấy task High Priority ≤ 30 phút. Hãy xem <code>/view_task</code>!',
+    NO_HIGH_PRIORITY_TASK: '💡 Không tìm thấy task High Priority ≤ 30 phút. Hãy xem <code>/today</code>!',
     INPUT_REQUIRED_ADD_TASK: '⚠️ Vui lòng nhập nội dung task. Ví dụ: <code>/add_task Thiết kế UI cho PRJ226, High, 2h</code>',
     INPUT_REQUIRED_HIGHLIGHT: '⚠️ Vui lòng nhập nội dung. Ví dụ: <code>/highlight Đóng gói thành công tính năng chatbot</code>',
     INPUT_REQUIRED_PLAN_WEEK: 'Usage: <code>/plan_week &lt;describe your week&gt;</code>',
     AI_PLANNING_FAULT: '[AI Planning Skill Fault] Không thể bóc tách JSON kế hoạch tuần do nội dung quá dài hoặc sai cấu trúc.',
     PLAN_CANCELLED_NEW_COMMAND: '⚠️ Đã hủy tạo task do phát hiện lệnh mới.',
     PLAN_EDIT_DISCARDED: '✏️ Plan discarded. Send <code>/plan_week &lt;your revised plan&gt;</code> to try again.',
-    UNKNOWN_COMMAND: 'Unknown command. Available:\n/add_task /view_task /rescue /highlight /plan_week /weekly_report',
+    UNKNOWN_COMMAND: 'Unknown command. Available:\n/add_task /today /rescue /highlight /plan_week /weekly_report',
     INVALID_NUMBER: '⚠️ Vui lòng nhập số hợp lệ hoặc gõ \'skip\'.',
   },
   PROMPTS: {
@@ -58,6 +58,6 @@ export const BOT_MESSAGES = {
     DEFERRED: 'Deferred!',
   },
   GREETINGS: {
-    WELCOME: 'Chào Sếp! Tôi là Liam, trợ lý Second Brain của Sếp. 🧠\n\nCác lệnh:\n• <code>/add_task &lt;text&gt;</code> — Tạo task\n• <code>/view_task</code> — Task hôm nay\n• <code>/rescue</code> — Tìm task cứu vãn tập trung\n• <code>/highlight &lt;text&gt;</code> — Ghi nhận thành tựu\n• <code>/plan_week &lt;text&gt;</code> — Lập kế hoạch tuần\n• <code>/weekly_report</code> — Báo cáo tuần',
+    WELCOME: 'Chào Sếp! Tôi là Liam, trợ lý Second Brain của Sếp. 🧠\n\nCác lệnh:\n• <code>/add_task &lt;text&gt;</code> — Tạo task\n• <code>/today</code> — Task hôm nay\n• <code>/rescue</code> — Tìm task cứu vãn tập trung\n• <code>/highlight &lt;text&gt;</code> — Ghi nhận thành tựu\n• <code>/plan_week &lt;text&gt;</code> — Lập kế hoạch tuần\n• <code>/weekly_report</code> — Báo cáo tuần',
   }
 } as const;
