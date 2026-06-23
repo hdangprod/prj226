@@ -1,3 +1,7 @@
+---
+trigger: model_decision
+---
+
 # Notion API Limits
 
 ## Quy định Rate Limit (HTTP 429)
