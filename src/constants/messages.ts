@@ -25,6 +25,7 @@ export const BOT_MESSAGES = {
     PLAN_CANCELLED_NEW_COMMAND: '⚠️ Đã hủy tạo task do phát hiện lệnh mới.',
     PLAN_EDIT_DISCARDED: '✏️ Plan discarded. Send <code>/plan_week &lt;your revised plan&gt;</code> to try again.',
     UNKNOWN_COMMAND: 'Unknown command. Available:\n/add_task /view_task /rescue /highlight /plan_week /weekly_report',
+    INVALID_NUMBER: '⚠️ Vui lòng nhập số hợp lệ hoặc gõ \'skip\'.',
   },
   PROMPTS: {
     CREATING_TASKS: 'Creating tasks...',
@@ -39,7 +40,8 @@ export const BOT_MESSAGES = {
     NO_PROJECT_PROMPT: 'Hiện tại chưa có Project nào. Vui lòng nhập mã/tên cho Project mới (vd: PRJ226):',
     FOCUS_RESCUE_TITLE: '⚡ <b>FOCUS RESCUE</b> ⚡',
     FOCUS_RESCUE_FOOTER: '👉 Bắt đầu ngay 25 phút Pomodoro!',
-    SAVING_BOOKMARK: '⏳ Đang phân tích và lưu Bookmark...',
+    ASK_DEFER_TIME: 'Bạn đã dành bao nhiêu thời gian cho task này rồi? (Gõ số giờ, hoặc gõ \'skip\' để chia đôi thời gian tự động)',
+    ROLLING_OVER_TASK: '⏳ Đang tạo rollover task sang ngày mai...',
   },
   BUTTONS: {
     OPEN_ROLLOVER: '📂 Mở Rollover Task',

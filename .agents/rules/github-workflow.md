@@ -14,7 +14,7 @@ Trừ khi User nói rõ "không cần tạo issue/không cần theo workflow", A
 
 1. **Tạo GitHub Issue:** Sử dụng lệnh `gh issue create` với Title và Description rõ ràng (Context, DoD).
 2. **Checkout Branch:** Tạo và checkout sang nhánh riêng biệt có liên kết với Issue theo định dạng: `feature/[Issue-ID]-[tên-ngắn-gọn]` hoặc `bugfix/[Issue-ID]-[tên-ngắn-gọn]`. Tuyệt đối không code trực tiếp trên `main`.
-3. **Lập Implementation Plan:** Cập nhật/Tạo Artifact `implementation_plan.md`. Báo cáo với User và **DỪNG LẠI** chờ User đọc và xác nhận "Proceed/Đồng ý".
+3. **Lập Implementation Plan:** Tạo một file Plan mới nằm trong thư mục `docs/plans/` với định dạng tên `issue-[ID]-[tên-ngắn-gọn].md` (vd: `docs/plans/issue-16-rollover-task.md`). Báo cáo với User và **DỪNG LẠI** chờ User đọc và xác nhận "Proceed/Đồng ý".
 4. **Tiến hành viết code:** Chỉ bắt đầu code sau khi User đã duyệt Plan.
 5. **Báo cáo và Pull Request:** Sau khi code và test (`npm run build`) thành công:
    - Viết một "Implementation Report" chứa các technical steps đã làm và comment trực tiếp vào GitHub Issue (`gh issue comment`).

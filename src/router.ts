@@ -95,17 +95,16 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await editMessageText(chatId, message.message_id, BOT_MESSAGES.SUCCESS.TASK_DONE);
 
       } else if (action === 'defer') {
-        const task = await getTaskById(payloadStr);
-        const newId = await rolloverTask(task, getTomorrowStr());
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.DEFERRED);
-        const deepLink = notionDeepLink(newId);
+        const session = await loadSession(chatId) || { state: 'AWAITING_DEFER_TIME' as const };
+        session.state = 'AWAITING_DEFER_TIME';
+        session.pendingTaskId = payloadStr;
+        await saveSession(chatId, session);
+
+        await answerCallbackQuery(callbackId);
         await editMessageText(
           chatId,
           message.message_id,
-          BOT_MESSAGES.SUCCESS.TASK_DEFERRED,
-          {
-            inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_ROLLOVER, url: deepLink }]],
-          }
+          BOT_MESSAGES.PROMPTS.ASK_DEFER_TIME
         );
 
       } else if (action === 'plan_confirm') {
@@ -165,7 +164,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
         // Wait, createTask uses task.projectName for prefix.
         // We will just create the task with the selected project ID.
         // If task.projectName is missing, createTask won't add prefix. Let's fix that in createTask later to fetch project name if missing.
-        const taskId = await createTask(session.taskInput, payloadStr, dailyLog.id);
+        const taskId = await createTask(session.taskInput!, payloadStr, dailyLog.id);
         const deepLink = notionDeepLink(taskId);
 
         await editMessageText(
@@ -206,11 +205,10 @@ export async function handleUpdate(body: unknown): Promise<void> {
         const selectedArea = areas.find(a => a.id === payloadStr);
         const areaName = selectedArea ? selectedArea.name : 'Unknown';
 
-        const newProj = await createProject(session.pendingProjectName, payloadStr);
-        session.taskInput.projectName = newProj.name;
-
+        const newProj = await createProject(session.pendingProjectName!, payloadStr);
+        session.taskInput!.projectName = newProj.name;
         const dailyLog = await getOrCreateDailyLog(getTodayStr());
-        const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
+        const taskId = await createTask(session.taskInput!, newProj.id, dailyLog.id);
         const deepLink = notionDeepLink(taskId);
 
         await deleteSession(chatId);
@@ -251,6 +249,39 @@ export async function handleUpdate(body: unknown): Promise<void> {
     // Check conversational state first
     const session = await loadSession(chatId);
 
+    // Handle AWAITING_DEFER_TIME
+    if (session && session.state === 'AWAITING_DEFER_TIME' && session.pendingTaskId) {
+      if (text.startsWith('/')) {
+        await deleteSession(chatId);
+        await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
+        // Continue processing the command
+      } else {
+        let spentHours: number | undefined;
+        if (text.toLowerCase() !== 'skip') {
+          spentHours = parseFloat(text);
+          if (isNaN(spentHours)) {
+            await sendMessage(chatId, BOT_MESSAGES.ERRORS.INVALID_NUMBER);
+            return;
+          }
+        }
+        
+        await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ROLLING_OVER_TASK);
+        const task = await getTaskById(session.pendingTaskId);
+        const newId = await rolloverTask(task, getTomorrowStr(), spentHours);
+        const deepLink = notionDeepLink(newId);
+        
+        await deleteSession(chatId);
+        await sendMessage(
+          chatId,
+          BOT_MESSAGES.SUCCESS.TASK_DEFERRED,
+          {
+            inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_ROLLOVER, url: deepLink }]],
+          }
+        );
+        return;
+      }
+    }
+
     // Handle AWAITING_AREA_SELECTION — abort if user types a command
     if (session && session.state === 'AWAITING_AREA_SELECTION') {
       if (text.startsWith('/')) {
@@ -263,12 +294,13 @@ export async function handleUpdate(body: unknown): Promise<void> {
         if (matchedArea) {
           // Execute same logic as callback
           const newProj = await createProject(session.pendingProjectName!, matchedArea.id);
-          session.taskInput.projectName = newProj.name;
+          session.taskInput!.projectName = newProj.name;
+          await saveSession(chatId, session);
 
           await sendMessage(chatId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
           
-          const dailyLog = await getOrCreateDailyLog(getTodayStr());
-          const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
+          const dailyLog = await getOrCreateDailyLog(today);
+          const taskId = await createTask(session.taskInput!, newProj.id, dailyLog.id);
           const deepLink = notionDeepLink(taskId);
 
           await deleteSession(chatId);

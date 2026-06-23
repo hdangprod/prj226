@@ -30,9 +30,10 @@ export async function deleteDraft(draftId: string): Promise<void> {
 // ─── User Conversational Sessions ───
 
 export interface UserSession {
-  state: 'AWAITING_PROJECT_SELECTION' | 'AWAITING_PROJECT_NAME' | 'AWAITING_AREA_SELECTION';
-  taskInput: TaskInput;
+  state: 'AWAITING_PROJECT_SELECTION' | 'AWAITING_PROJECT_NAME' | 'AWAITING_AREA_SELECTION' | 'AWAITING_DEFER_TIME';
+  taskInput?: TaskInput;
   pendingProjectName?: string;
+  pendingTaskId?: string;
 }
 
 export async function saveSession(chatId: number | string, session: UserSession): Promise<void> {
