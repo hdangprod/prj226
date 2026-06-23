@@ -59,13 +59,26 @@ function formatPlanPreview(drafts: PlannedTask[]): string {
 }
 
 function getTodayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Use timezone +08:00
+  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
 }
 
 function getTomorrowStr(): string {
-  const d = new Date();
+  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
   d.setDate(d.getDate() + 1);
   return d.toISOString().slice(0, 10);
+}
+
+function getCurrentIsoTime(): string {
+  // Returns current time in ISO 8601 format with +08:00 timezone
+  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
+  return d.toISOString().replace('Z', '+08:00');
+}
+
+function getTomorrowDefaultTime(): string {
+  // Returns tomorrow at 09:00:00+08:00
+  return `${getTomorrowStr()}T09:00:00+08:00`;
 }
 
 // ─── Main Router ───
@@ -267,7 +280,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
         
         await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ROLLING_OVER_TASK);
         const task = await getTaskById(session.pendingTaskId);
-        const newId = await rolloverTask(task, getTomorrowStr(), spentHours);
+        const newId = await rolloverTask(task, getTomorrowStr(), getTomorrowDefaultTime(), spentHours);
         const deepLink = notionDeepLink(newId);
         
         await deleteSession(chatId);
@@ -367,7 +380,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
       }
       
       await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_TASK);
-      const parsedTask = await parseTaskInput(input, today);
+      const parsedTask = await parseTaskInput(input, getCurrentIsoTime());
       const activeProjects = await fetchActiveProjects();
 
       if (activeProjects.length > 0) {
@@ -462,7 +475,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_WEEKLY_PLAN);
         
         const skill = new WeeklyPlanningSkill();
-        const { draftId, drafts } = await skill.execute({ text: input, today });
+        const { draftId, drafts } = await skill.execute({ text: input, currentIsoTime: getCurrentIsoTime() });
         
         if (drafts.length === 0) {
           await sendMessage(chatId, BOT_MESSAGES.ERRORS.NO_TASK_FOUND);

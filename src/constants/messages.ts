@@ -42,6 +42,7 @@ export const BOT_MESSAGES = {
     FOCUS_RESCUE_FOOTER: '👉 Bắt đầu ngay 25 phút Pomodoro!',
     ASK_DEFER_TIME: 'Bạn đã dành bao nhiêu thời gian cho task này rồi? (Gõ số giờ, hoặc gõ \'skip\' để chia đôi thời gian tự động)',
     ROLLING_OVER_TASK: '⏳ Đang tạo rollover task sang ngày mai...',
+    SAVING_BOOKMARK: '⏳ Đang phân tích và lưu Bookmark...',
   },
   BUTTONS: {
     OPEN_ROLLOVER: '📂 Mở Rollover Task',

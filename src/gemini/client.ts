@@ -14,7 +14,7 @@ const taskSchema: Schema = {
     projectName: { type: SchemaType.STRING, description: 'Name of the related project, if mentioned. E.g., PRJ226' },
     priority: { type: SchemaType.STRING, description: 'Priority of the task: High, Medium, or Low', enum: ['High', 'Medium', 'Low'] },
     estimate: { type: SchemaType.NUMBER, description: 'Estimated effort in hours. Default to 1 if unknown.' },
-    dueDate: { type: SchemaType.STRING, description: 'Due date in YYYY-MM-DD format.' },
+    dueDate: { type: SchemaType.STRING, description: 'Due date in ISO 8601 format including time and timezone (e.g., 2026-06-23T15:00:00+08:00). If the user specifies a time, include it. If no time is specified, default to 09:00:00+08:00 of the target day.' },
     checklist: {
       type: SchemaType.ARRAY,
       description: 'A list of 2-5 actionable subtasks to complete the main task.',
@@ -55,8 +55,8 @@ export async function parseTaskInput(text: string, currentDate: string): Promise
 
   const prompt = `
     You are an intelligent productivity assistant. Parse the following user request into a structured task.
-    Current date: ${currentDate}.
-    If the user doesn't specify a date, default to ${currentDate}.
+    Current date and time: ${currentDate}.
+    If the user doesn't specify a date, default to today. If no time is specified, default to 09:00:00+08:00.
     If priority is not mentioned, infer it or default to "Medium".
     If estimate is not mentioned, infer based on complexity or default to 1.
     Create a checklist of 2-5 actionable steps to complete this task.
@@ -88,7 +88,7 @@ export async function parseWeeklyPlan(text: string, currentDate: string): Promis
     Current date: ${currentDate}.
     
     Rules:
-    - If a task has no explicit date, distribute it reasonably throughout the upcoming week starting from ${currentDate}.
+    - If a task has no explicit date, distribute it reasonably throughout the upcoming week starting from ${currentDate}. Default time is 09:00:00+08:00.
     - Ensure every task has an inferred Project Name if mentioned in the context.
     - Break complex goals into manageable tasks. Provide a 2-5 item checklist for each task.
     
