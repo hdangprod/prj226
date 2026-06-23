@@ -9,6 +9,7 @@ export const BOT_MESSAGES = {
     TASK_ANALYZED: (name: string) => `✅ Phân tích xong: <b>${name}</b>`,
     NO_PENDING_TASKS: '🎉 Hôm nay không còn task chưa hoàn thành!',
     HIGHLIGHT_UPDATED: '📝 Daily Log highlight updated!',
+    BOOKMARK_SAVED: (title: string, areaName: string) => `✅ Đã lưu Bookmark: <b>${title}</b> vào Area <b>${areaName}</b>.`,
   },
   ERRORS: {
     SOMETHING_WENT_WRONG: (msg: string) => `❌ Something went wrong: ${msg}`,

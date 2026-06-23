@@ -305,3 +305,18 @@ export async function updateDailyLogHighlight(
     },
   });
 }
+
+/**
+ * FR-8: Save a new resource/bookmark to the Resources Database.
+ */
+export async function addResource(title: string, url: string, areaId: string): Promise<string> {
+  const newPage = await notion.pages.create({
+    parent: { database_id: config.NOTION_RESOURCES_DB_ID },
+    properties: {
+      Name: { title: [{ text: { content: title } }] },
+      URL: { url: url },
+      Area: { relation: [{ id: areaId }] },
+    },
+  });
+  return newPage.id;
+}

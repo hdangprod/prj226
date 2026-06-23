@@ -27,8 +27,18 @@ const taskSchema: Schema = {
 // Define Gemini JSON schema for an array of tasks (for weekly planning)
 const weeklyPlanSchema: Schema = {
   type: SchemaType.ARRAY,
-  description: 'An array of tasks planned for the week.',
   items: taskSchema,
+};
+
+// Define Gemini JSON schema for resource classification
+const resourceClassificationSchema: Schema = {
+  type: SchemaType.OBJECT,
+  description: 'Classification result for a saved URL/Bookmark.',
+  properties: {
+    title: { type: SchemaType.STRING, description: 'A concise, human-readable title extracted from the URL context.' },
+    areaId: { type: SchemaType.STRING, description: 'The ID of the most appropriate area for this URL.' },
+  },
+  required: ['title', 'areaId'],
 };
 
 /**
@@ -128,4 +138,36 @@ export async function analyzeWeeklyReport(metricsJson: string): Promise<string> 
 
   const result = await model.generateContent(prompt);
   return result.response.text().trim();
+}
+
+/**
+ * FR-8: Classify a bookmark URL into a Notion Area using the LITE model.
+ */
+export async function classifyResource(url: string, areas: { id: string, name: string }[]): Promise<{ title: string, areaId: string }> {
+  const model = genAI.getGenerativeModel({
+    model: MODELS.LITE,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: resourceClassificationSchema,
+    },
+  });
+
+  const areasListStr = areas.map(a => `- ${a.name} (ID: ${a.id})`).join('\n');
+
+  const prompt = `
+    You are an intelligent information organizer.
+    Analyze the following URL, extract or guess a short, concise title for it.
+    Then, match this URL to the most appropriate Area from the provided list.
+    Return the title and the exact ID of the chosen Area.
+    If no area perfectly matches, choose the one that fits best.
+
+    URL: "${url}"
+
+    Available Areas:
+    ${areasListStr}
+  `;
+
+  const result = await model.generateContent(prompt);
+  const responseText = result.response.text();
+  return JSON.parse(responseText) as { title: string, areaId: string };
 }
