@@ -13,7 +13,7 @@ export interface PlannedTask {
 
 export interface WeeklyPlanningInput {
   text: string;
-  today: string;
+  currentIsoTime: string;
 }
 
 export interface WeeklyPlanningOutput {
@@ -32,7 +32,7 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
   async execute(input: WeeklyPlanningInput): Promise<WeeklyPlanningOutput> {
     let parsed: GeminiTaskOutput[];
     try {
-      parsed = await parseWeeklyPlan(input.text, input.today);
+      parsed = await parseWeeklyPlan(input.text, input.currentIsoTime);
     } catch (error) {
       throw new Error(BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT);
     }

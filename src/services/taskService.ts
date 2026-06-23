@@ -29,11 +29,12 @@ function delay(ms: number): Promise<void> {
 
 export async function addTaskFromText(
   text: string,
-  today: string,
+  todayStr: string,
+  currentIsoTime: string,
   _chatId?: number,
   dailyLogId?: string
 ): Promise<string> {
-  const parsed = await parseTaskInput(text, today);
+  const parsed = await parseTaskInput(text, currentIsoTime);
 
   let projectId: string | undefined;
   if (parsed.projectName) {
@@ -41,7 +42,7 @@ export async function addTaskFromText(
     if (project) projectId = project.id;
   }
 
-  const logId = dailyLogId ?? (await getOrCreateDailyLog(today)).id;
+  const logId = dailyLogId ?? (await getOrCreateDailyLog(todayStr)).id;
 
   const taskId = await createTask(parsed, projectId, logId);
   return taskId;
@@ -89,6 +90,7 @@ export async function completeTask(taskId: string): Promise<void> {
 export async function rolloverTask(
   task: TaskPage,
   tomorrowStr: string,
+  tomorrowDefaultTime: string,
   spentHours?: number
 ): Promise<string> {
   let newEstimate = task.estimate / 2;
@@ -104,7 +106,7 @@ export async function rolloverTask(
     name: `[Rollover] ${task.name}`,
     priority: task.priority,
     estimate: newEstimate,
-    dueDate: tomorrowStr,
+    dueDate: tomorrowDefaultTime,
     checklist: [], // handled by overrideChecklist
   };
 
