@@ -6,9 +6,10 @@ import {
   completeTask,
   getTaskById,
   getTodayTaskPages,
-  bulkCreateTasks,
+  bulkCreateTasksV2,
 } from './services/taskService';
-import { WeeklyPlanningSkill, type PlannedTask } from './skills/WeeklyPlanningSkill';
+import { WeeklyPlanningSkill, type ScheduledTask } from './skills/WeeklyPlanningSkill';
+import type { BusySlot } from './google/client';
 import { updateHighlight } from './services/highlightService';
 import { generateWeeklyReport } from './services/reportService';
 import { 
@@ -42,20 +43,70 @@ function notionDeepLink(pageId: string): string {
   return `https://notion.so/${pageId.replace(/-/g, '')}`;
 }
 
+function formatSchedulePreview(drafts: ScheduledTask[], gcalEvents: BusySlot[]): string {
+  const lines: string[] = ['🗓 <b>Smart Weekly Schedule Preview</b>\n'];
 
-function formatPlanPreview(drafts: PlannedTask[]): string {
-  const lines: string[] = [`🗓 <b>Weekly Plan Preview</b> (${drafts.length} tasks)\n`];
-  drafts.forEach((d, i) => {
-    lines.push(
-      `<b>${i + 1}. ${escapeHtml(d.prefixedName)}</b>\n` +
-        `   Priority: ${d.task.priority} | Est: ${d.task.estimate}h | Due: ${d.task.dueDate}` +
-        (!d.projectId ? `\n   ⚠️ Project not found — will be created unlinked` : '') +
-        (d.task.checklist.length
-          ? `\n   • ${d.task.checklist.map(escapeHtml).join('\n   • ')}`
-          : '')
-    );
-  });
+  // Group tasks by day
+  const dayMap = new Map<string, ScheduledTask[]>();
+  for (const d of drafts) {
+    const dayStr = d.task.properties.Date.start.slice(0, 10);
+    if (!dayMap.has(dayStr)) dayMap.set(dayStr, []);
+    dayMap.get(dayStr)!.push(d);
+  }
+
+  // Group GCal events by day
+  const gcalDayMap = new Map<string, BusySlot[]>();
+  for (const e of gcalEvents) {
+    const dayStr = e.start.slice(0, 10);
+    if (!gcalDayMap.has(dayStr)) gcalDayMap.set(dayStr, []);
+    gcalDayMap.get(dayStr)!.push(e);
+  }
+
+  // Merge all days and sort
+  const allDays = new Set([...dayMap.keys(), ...gcalDayMap.keys()]);
+  const sortedDays = [...allDays].sort();
+
+  const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+  for (const day of sortedDays) {
+    const date = new Date(day + 'T00:00:00+08:00');
+    const dayName = dayNames[date.getDay()];
+    lines.push(`\n📅 <b>${dayName} — ${day}</b>`);
+
+    // Show GCal events first
+    const gcalItems = gcalDayMap.get(day) ?? [];
+    for (const e of gcalItems) {
+      const startTime = formatTime(e.start);
+      const endTime = formatTime(e.end);
+      lines.push(`  🔒 <i>${startTime}–${endTime}</i> ${escapeHtml(e.summary)}`);
+    }
+
+    // Show AI-scheduled tasks
+    const tasks = dayMap.get(day) ?? [];
+    for (const d of tasks) {
+      const startTime = formatTime(d.task.properties.Date.start);
+      const endTime = d.task.properties.Date.end ? formatTime(d.task.properties.Date.end) : '';
+      const timeRange = endTime ? `${startTime}–${endTime}` : startTime;
+      const priorityIcon = d.task.properties.Priority === 'High' ? '🔴' : d.task.properties.Priority === 'Medium' ? '🟡' : '🟢';
+      lines.push(
+        `  ${priorityIcon} <b>${timeRange}</b> ${escapeHtml(d.displayName)}` +
+        `\n     Est: ${d.task.properties.Estimate}h | ${d.task.properties.Priority}`
+      );
+    }
+  }
+
+  lines.push(`\n<i>Total: ${drafts.length} tasks scheduled</i>`);
   return lines.join('\n');
+}
+
+function formatTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  let h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const mStr = m < 10 ? '0' + m : String(m);
+  return `${h}:${mStr} ${ampm}`;
 }
 
 function getTodayStr(): string {
@@ -120,17 +171,24 @@ export async function handleUpdate(body: unknown): Promise<void> {
           BOT_MESSAGES.PROMPTS.ASK_DEFER_TIME
         );
 
-      } else if (action === 'plan_confirm') {
+      } else if (action === 'schedule_confirm') {
+        // V2: User approved the weekly schedule
         const drafts = await loadDraft(payloadStr);
         if (!drafts) {
           await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.PLAN_EXPIRED);
           return;
         }
-        await deleteDraft(payloadStr);
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.CREATING_TASKS);
 
-        const dailyLog = await getOrCreateDailyLog(getTodayStr());
-        const result = await bulkCreateTasks(drafts, dailyLog.id);
+        // Immediately mutate button to prevent double-click
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.PROCESSING);
+        await editMessageText(
+          chatId,
+          message.message_id,
+          BOT_MESSAGES.PROMPTS.INJECTING_SCHEDULE
+        );
+
+        await deleteDraft(payloadStr);
+        const result = await bulkCreateTasksV2(drafts);
 
         const linkList = result.taskIds
           .map((id, i) => `${i + 1}. <a href="${notionDeepLink(id)}">${BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION}</a>`)
@@ -139,7 +197,7 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await editMessageText(
           chatId,
           message.message_id,
-          `${BOT_MESSAGES.SUCCESS.PLAN_CREATED(result.createdCount, drafts.length)}\n\n${linkList}`,
+          `${BOT_MESSAGES.SUCCESS.WEEKLY_SCHEDULE_CREATED(result.createdCount, drafts.length)}\n\n${linkList}`,
           {
             inline_keyboard: result.taskIds.slice(0, 3).map((id, i) => [
               { text: BOT_MESSAGES.BUTTONS.OPEN_TASK(i + 1), url: notionDeepLink(id) },
@@ -147,20 +205,11 @@ export async function handleUpdate(body: unknown): Promise<void> {
           }
         );
 
-      } else if (action === 'plan_edit') {
-        await deleteDraft(payloadStr);
-        await answerCallbackQuery(callbackId);
-        await editMessageText(
-          chatId,
-          message.message_id,
-          BOT_MESSAGES.ERRORS.PLAN_EDIT_DISCARDED
-        );
-
-      } else if (action === 'plan_cancel') {
+      } else if (action === 'schedule_cancel') {
         await deleteDraft(payloadStr);
         await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.CANCELLED);
         await editMessageText(chatId, message.message_id, BOT_MESSAGES.ERRORS.PLAN_CANCELLED);
-      
+
       } else if (action === 'addtask_proj') {
         // payloadStr = projectId
         const session = await loadSession(chatId);
@@ -172,11 +221,6 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await deleteSession(chatId);
 
         const dailyLog = await getOrCreateDailyLog(getTodayStr());
-        // Use the selected project's name as task prefix if it was not in taskInput (or even if it was, override for consistency?)
-        // The project name isn't directly in the callback payload, but createTask doesn't STRICTLY need task.projectName
-        // Wait, createTask uses task.projectName for prefix.
-        // We will just create the task with the selected project ID.
-        // If task.projectName is missing, createTask won't add prefix. Let's fix that in createTask later to fetch project name if missing.
         const taskId = await createTask(session.taskInput!, payloadStr, dailyLog.id);
         const deepLink = notionDeepLink(taskId);
 
@@ -473,29 +517,30 @@ export async function handleUpdate(body: unknown): Promise<void> {
       await updateHighlight(input, today);
       await sendMessage(chatId, BOT_MESSAGES.SUCCESS.HIGHLIGHT_UPDATED);
 
-    // /plan_week
-    } else if (text.startsWith('/plan_week')) {
-      const input = text.replace('/plan_week', '').trim();
+    // /weekly_planning (V2)
+    } else if (text.startsWith('/weekly_planning')) {
+      const input = text.replace('/weekly_planning', '').trim();
       if (!input) {
         await sendMessage(
           chatId,
-          BOT_MESSAGES.ERRORS.INPUT_REQUIRED_PLAN_WEEK
+          BOT_MESSAGES.ERRORS.INPUT_REQUIRED_WEEKLY_PLANNING
         );
       } else {
         await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_WEEKLY_PLAN);
         
         const skill = new WeeklyPlanningSkill();
-        const { draftId, drafts } = await skill.execute({ text: input, currentIsoTime: getCurrentIsoTime() });
+        const { draftId, drafts, gcalEvents } = await skill.execute({ text: input, currentIsoTime: getCurrentIsoTime() });
         
         if (drafts.length === 0) {
           await sendMessage(chatId, BOT_MESSAGES.ERRORS.NO_TASK_FOUND);
         } else {
-          await sendMessage(chatId, formatPlanPreview(drafts), {
+          await sendMessage(chatId, formatSchedulePreview(drafts, gcalEvents), {
             inline_keyboard: [
               [
-                { text: BOT_MESSAGES.BUTTONS.CREATE_ALL, callback_data: `plan_confirm:${draftId}` },
-                { text: BOT_MESSAGES.BUTTONS.EDIT, callback_data: `plan_edit:${draftId}` },
-                { text: BOT_MESSAGES.BUTTONS.CANCEL, callback_data: `plan_cancel:${draftId}` },
+                { text: BOT_MESSAGES.BUTTONS.APPROVE_SCHEDULE, callback_data: `schedule_confirm:${draftId}` },
+              ],
+              [
+                { text: BOT_MESSAGES.BUTTONS.CANCEL_SCHEDULE, callback_data: `schedule_cancel:${draftId}` },
               ],
             ],
           });

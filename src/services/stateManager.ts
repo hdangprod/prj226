@@ -1,26 +1,35 @@
 import { Firestore } from '@google-cloud/firestore';
-import type { PlannedTask } from '../skills/WeeklyPlanningSkill';
+import type { ScheduledTask } from '../skills/WeeklyPlanningSkill';
 import type { TaskInput } from '../notion/types';
 
 const DB_PLAN_DRAFTS = 'plan_drafts';
 const DB_USER_SESSIONS = 'user_sessions';
+const DRAFT_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const db = new Firestore();
 
 // ─── Plan Drafts ───
 
-export async function saveDraft(draftId: string, drafts: PlannedTask[]): Promise<void> {
+export async function saveDraft(draftId: string, drafts: ScheduledTask[]): Promise<void> {
   await db.collection(DB_PLAN_DRAFTS).doc(draftId).set({
     drafts: JSON.stringify(drafts),
     createdAt: new Date().toISOString(),
   });
 }
 
-export async function loadDraft(draftId: string): Promise<PlannedTask[] | null> {
+export async function loadDraft(draftId: string): Promise<ScheduledTask[] | null> {
   const doc = await db.collection(DB_PLAN_DRAFTS).doc(draftId).get();
   if (!doc.exists) return null;
   const data = doc.data();
-  return JSON.parse(data?.drafts ?? '[]') as PlannedTask[];
+
+  // Enforce TTL: expire drafts older than 15 minutes
+  const createdAt = data?.createdAt ? new Date(data.createdAt).getTime() : 0;
+  if (Date.now() - createdAt > DRAFT_TTL_MS) {
+    await deleteDraft(draftId);
+    return null;
+  }
+
+  return JSON.parse(data?.drafts ?? '[]') as ScheduledTask[];
 }
 
 export async function deleteDraft(draftId: string): Promise<void> {

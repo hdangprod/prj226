@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client';
 import { config } from '../config';
-import type { TaskInput, TaskPage, ChecklistBlock, DailyLogPage } from './types';
+import type { TaskInput, TaskPage, ChecklistBlock, DailyLogPage, NotionBusySlot, WeeklyTaskV2 } from './types';
 
 export const notion = new Client({ auth: config.NOTION_API_KEY });
 
@@ -319,4 +319,109 @@ export async function addResource(title: string, url: string, areaId: string): P
     },
   });
   return newPage.id;
+}
+
+/**
+ * V2: Fetch active Notion tasks with Date property within a date range.
+ * Used to build Busy_Slots_Context together with Google Calendar events.
+ */
+export async function fetchActiveTasksWithDates(
+  startDate: string,
+  endDate: string
+): Promise<NotionBusySlot[]> {
+  const response = await notion.databases.query({
+    database_id: config.NOTION_TASKS_DB_ID,
+    filter: {
+      and: [
+        { property: 'Status', select: { does_not_equal: 'Done' } },
+        { property: 'Status', select: { does_not_equal: 'Archived' } },
+        { property: 'Date', date: { on_or_after: startDate } },
+        { property: 'Date', date: { on_or_before: endDate } },
+      ],
+    },
+    sorts: [{ property: 'Date', direction: 'ascending' }],
+  });
+
+  return (response.results as NotionPage[]).map((p) => ({
+    name: getTitle(p),
+    start: getDate(p, 'Date'),
+    estimate: getNumber(p, 'Estimate'),
+  }));
+}
+
+/**
+ * V2: Create a task page from the new WeeklyTaskV2 schema.
+ * Injects Callout_Description and Checklist into the page body.
+ */
+export async function createTaskV2(
+  task: WeeklyTaskV2,
+  projectId?: string,
+  dailyLogId?: string
+): Promise<string> {
+  // Build prefix if project is linked
+  let taskPrefix = '';
+  if (projectId) {
+    const projectPage = await notion.pages.retrieve({ page_id: projectId }) as NotionPage;
+    const actualProjectName = getTitle(projectPage);
+    if (actualProjectName) {
+      const existingTasksCount = await countTasksInProject(projectId);
+      taskPrefix = `${actualProjectName}_T${existingTasksCount + 1}: `;
+    }
+  }
+
+  const properties: Record<string, unknown> = {
+    Name: { title: [{ text: { content: `${taskPrefix}${task.properties.Name}` } }] },
+    Priority: { select: { name: task.properties.Priority } },
+    Estimate: { number: task.properties.Estimate },
+    Date: {
+      date: {
+        start: task.properties.Date.start,
+        ...(task.properties.Date.end ? { end: task.properties.Date.end } : {}),
+      },
+    },
+    Status: { select: { name: 'Not Started' } },
+  };
+
+  if (projectId) properties['Project'] = { relation: [{ id: projectId }] };
+  if (dailyLogId) properties['Daily Log'] = { relation: [{ id: dailyLogId }] };
+
+  const page = await notion.pages.create({
+    parent: { database_id: config.NOTION_TASKS_DB_ID },
+    properties: properties as any,
+  });
+
+  // Build page body: Callout (purpose) + Checklist (to-do blocks)
+  const children: any[] = [];
+
+  if (task.content.Callout_Description) {
+    children.push({
+      object: 'block',
+      type: 'callout',
+      callout: {
+        icon: { type: 'emoji', emoji: '💡' },
+        color: 'gray_background',
+        rich_text: [{ type: 'text', text: { content: task.content.Callout_Description } }],
+      },
+    });
+  }
+
+  for (const item of task.content.Checklist) {
+    children.push({
+      object: 'block',
+      type: 'to_do',
+      to_do: {
+        rich_text: [{ type: 'text', text: { content: item } }],
+        checked: false,
+      },
+    });
+  }
+
+  if (children.length > 0) {
+    await notion.blocks.children.append({
+      block_id: page.id,
+      children,
+    });
+  }
+
+  return page.id;
 }

@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import type { Schema } from '@google/generative-ai';
 import { config, MODELS } from '../config';
-import type { GeminiTaskOutput } from '../notion/types';
+import type { GeminiTaskOutput, WeeklyTaskV2 } from '../notion/types';
 
 const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
 
@@ -170,4 +170,116 @@ export async function classifyResource(url: string, areas: { id: string, name: s
   const result = await model.generateContent(prompt);
   const responseText = result.response.text();
   return JSON.parse(responseText) as { title: string, areaId: string };
+}
+
+// ─── V2 Weekly Scheduler Schema & Function ───
+
+const weeklyScheduleV2Schema: Schema = {
+  type: SchemaType.ARRAY,
+  items: {
+    type: SchemaType.OBJECT,
+    properties: {
+      properties: {
+        type: SchemaType.OBJECT,
+        properties: {
+          Name: { type: SchemaType.STRING, description: 'Action-oriented task title' },
+          Project: { type: SchemaType.STRING, description: 'Target project code/name, if mentioned. E.g., PRJ226' },
+          Status: { type: SchemaType.STRING, description: 'Always "Not Started"' },
+          Priority: { type: SchemaType.STRING, enum: ['High', 'Medium', 'Low'] },
+          Estimate: { type: SchemaType.NUMBER, description: 'Estimated hours as a decimal' },
+          Date: {
+            type: SchemaType.OBJECT,
+            properties: {
+              start: { type: SchemaType.STRING, description: 'ISO 8601 DateTime with timezone (e.g., 2026-06-24T14:00:00+08:00)' },
+              end: { type: SchemaType.STRING, description: 'ISO 8601 DateTime with timezone (e.g., 2026-06-24T16:30:00+08:00)' },
+            },
+            required: ['start', 'end'],
+          },
+        },
+        required: ['Name', 'Status', 'Priority', 'Estimate', 'Date'],
+      },
+      content: {
+        type: SchemaType.OBJECT,
+        properties: {
+          Callout_Description: { type: SchemaType.STRING, description: 'Purpose explanation starting with 💡 **MỤC ĐÍCH:**' },
+          Checklist: {
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
+            description: 'Micro-action items, each under 45 minutes of focus',
+          },
+        },
+        required: ['Callout_Description', 'Checklist'],
+      },
+    },
+    required: ['properties', 'content'],
+  },
+};
+
+/**
+ * V2 Weekly Scheduler: Uses Busy_Slots_Context + productivity rules.
+ * Auto-retries up to 2 times on malformed JSON.
+ */
+export async function planWeeklySchedule(
+  userInput: string,
+  currentIsoTime: string,
+  busySlotsContext: string
+): Promise<WeeklyTaskV2[]> {
+  const model = genAI.getGenerativeModel({
+    model: MODELS.PRO,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: weeklyScheduleV2Schema,
+    },
+  });
+
+  const systemPrompt = `
+You are an elite Senior Project Manager and productivity optimizer named 'Liam'.
+The user will provide a rough draft of their weekly commitments. Your job is to transform it into an optimal, conflict-free weekly execution plan.
+
+Current date and time: ${currentIsoTime}
+
+=== BUSY SLOTS (DO NOT OVERLAP) ===
+${busySlotsContext || 'No existing commitments found.'}
+
+=== STRICT PRODUCTIVITY GUARDRAILS ===
+1. **The 80/20 Rule:** Maximum 3 tasks with "High" priority per day. Remaining tasks must be "Medium" or "Low".
+2. **Habit Friction Minimization:** Re-title tasks using direct, action-oriented verbs (e.g., "Write", "Review", "Build"). Split complex goals into micro-checklists where each item requires < 45 minutes.
+3. **Temporal Tetris:**
+   - Work tasks → 09:00 – 18:00 window (Mon–Fri)
+   - Personal/Growth tasks → 20:00 – 22:30 window or weekends
+   - NEVER overlap with busy slots listed above.
+4. **Zero Free Slots Handling:** If a day is fully booked, do NOT force tasks into it. Instead, mark those tasks with Priority: "Low" and push them to the next available day. If the entire week is full, leave them unscheduled with a note in the Callout_Description.
+
+=== OUTPUT RULES ===
+- Status is always "Not Started".
+- Date.start and Date.end must be valid ISO 8601 DateTime strings with +08:00 timezone.
+- Date.end = Date.start + Estimate (in hours).
+- Callout_Description must start with "💡 **MỤC ĐÍCH:** " followed by an explanation.
+- Project field: if the user mentions a project name/code, set it. Otherwise omit or set empty string.
+- Checklist: 2–5 micro-action items per task, each achievable in < 45 minutes.
+`;
+
+  const userPrompt = `
+User's rough weekly plan:
+"${userInput}"
+`;
+
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent([systemPrompt, userPrompt]);
+      const responseText = result.response.text();
+      const parsed = JSON.parse(responseText) as WeeklyTaskV2[];
+      // Basic validation
+      if (!Array.isArray(parsed)) throw new Error('Response is not an array');
+      return parsed;
+    } catch (error) {
+      if (attempt === MAX_RETRIES) {
+        throw new Error(`[AI Scheduler] Failed after ${MAX_RETRIES + 1} attempts: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      console.warn(`[AI Scheduler] Retry ${attempt + 1}/${MAX_RETRIES}...`);
+    }
+  }
+  // Unreachable but satisfies TypeScript
+  throw new Error('[AI Scheduler] Unexpected failure');
 }
