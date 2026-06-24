@@ -224,13 +224,6 @@ export async function planWeeklySchedule(
   currentIsoTime: string,
   busySlotsContext: string
 ): Promise<WeeklyTaskV2[]> {
-  const model = genAI.getGenerativeModel({
-    model: MODELS.PRO,
-    generationConfig: {
-      responseMimeType: 'application/json',
-      responseSchema: weeklyScheduleV2Schema,
-    },
-  });
 
   const systemPrompt = `
 You are an elite Senior Project Manager and productivity optimizer named 'Liam'.
@@ -264,9 +257,18 @@ User's rough weekly plan:
 "${userInput}"
 `;
 
+  let currentModelName = MODELS.PRO;
   const MAX_RETRIES = 2;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
+      const model = genAI.getGenerativeModel({
+        model: currentModelName,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: weeklyScheduleV2Schema,
+        },
+      });
+
       const result = await model.generateContent([systemPrompt, userPrompt]);
       let responseText = result.response.text();
       
@@ -283,10 +285,20 @@ User's rough weekly plan:
       if (!Array.isArray(parsed)) throw new Error('Response is not an array');
       return parsed;
     } catch (error) {
-      if (attempt === MAX_RETRIES) {
-        throw new Error(`Failed after ${MAX_RETRIES + 1} attempts: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Automatic fallback to LITE model if PRO is overloaded
+      if (errorMessage.includes('503 Service Unavailable') && currentModelName !== MODELS.LITE) {
+        console.warn(`[AI Scheduler] Model ${currentModelName} is overloaded (503). Falling back to ${MODELS.LITE}...`);
+        currentModelName = MODELS.LITE;
+        // Do not count this as a retry penalty, let the loop continue
+        continue;
       }
-      console.warn(`[AI Scheduler] Retry ${attempt + 1}/${MAX_RETRIES} due to error: ${error instanceof Error ? error.message : String(error)}`);
+
+      if (attempt === MAX_RETRIES) {
+        throw new Error(`Failed after ${MAX_RETRIES + 1} attempts: ${errorMessage}`);
+      }
+      console.warn(`[AI Scheduler] Retry ${attempt + 1}/${MAX_RETRIES} due to error: ${errorMessage}`);
     }
   }
   // Unreachable but satisfies TypeScript
