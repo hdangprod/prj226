@@ -91,8 +91,8 @@ Model names change over time, so they are **env-driven** and must NOT be hardcod
  *   - PRO:  low-frequency, complex reasoning (bulk planning, retrospective)
  */
 export const MODELS = {
-  LITE: process.env.GEMINI_MODEL_LITE || 'gemini-1.5-flash', // Tối ưu chi phí
-  PRO: process.env.GEMINI_MODEL_PRO || 'gemini-1.5-pro',     // Tối ưu logic
+  LITE: process.env.GEMINI_MODEL_LITE || 'gemini-3.1-flash-lite', // Tối ưu chi phí
+  PRO: process.env.GEMINI_MODEL_PRO || 'gemini-3.1-flash',     // Tối ưu logic
 } as const;
 ```
 
