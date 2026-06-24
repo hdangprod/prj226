@@ -268,16 +268,25 @@ User's rough weekly plan:
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent([systemPrompt, userPrompt]);
-      const responseText = result.response.text();
+      let responseText = result.response.text();
+      
+      // Clean up markdown block if Gemini accidentally wraps it despite application/json mime type
+      responseText = responseText.trim();
+      if (responseText.startsWith('```json')) {
+        responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+      } else if (responseText.startsWith('```')) {
+        responseText = responseText.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+      }
+
       const parsed = JSON.parse(responseText) as WeeklyTaskV2[];
       // Basic validation
       if (!Array.isArray(parsed)) throw new Error('Response is not an array');
       return parsed;
     } catch (error) {
       if (attempt === MAX_RETRIES) {
-        throw new Error(`[AI Scheduler] Failed after ${MAX_RETRIES + 1} attempts: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed after ${MAX_RETRIES + 1} attempts: ${error instanceof Error ? error.message : String(error)}`);
       }
-      console.warn(`[AI Scheduler] Retry ${attempt + 1}/${MAX_RETRIES}...`);
+      console.warn(`[AI Scheduler] Retry ${attempt + 1}/${MAX_RETRIES} due to error: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   // Unreachable but satisfies TypeScript

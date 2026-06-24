@@ -96,7 +96,8 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
     try {
       parsed = await planWeeklySchedule(input.text, input.currentIsoTime, busySlotsContext);
     } catch (error) {
-      throw new Error(BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT);
+      const rawError = error instanceof Error ? error.message : String(error);
+      throw new Error(`${BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT} (Lỗi gốc: ${rawError})`);
     }
 
     // Phase 3: Resolve project IDs
