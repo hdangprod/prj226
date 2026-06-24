@@ -12,6 +12,7 @@ import type { WeeklyTaskV2, NotionBusySlot } from '../notion/types';
 export interface ScheduledTask {
   task: WeeklyTaskV2;
   projectId?: string;
+  rawProjectName?: string;
   displayName: string;
 }
 
@@ -105,6 +106,7 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
     for (const t of parsed) {
       let projectId: string | undefined;
       let displayName = t.properties.Name;
+      const rawProjectName = t.properties.Project;
 
       if (t.properties.Project) {
         const project = await findProjectByName(t.properties.Project);
@@ -116,7 +118,7 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
         }
       }
 
-      drafts.push({ task: t, projectId, displayName });
+      drafts.push({ task: t, projectId, rawProjectName, displayName });
     }
 
     // Phase 4: Save draft with metadata

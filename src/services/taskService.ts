@@ -12,6 +12,7 @@ import {
   queryTasksByProject,
   updateDailyLogHighlight,
   countTasksInProject,
+  createProject,
 } from '../notion/client';
 import type { TaskInput, TaskPage, GeminiTaskOutput } from '../notion/types';
 import type { ScheduledTask } from '../skills/WeeklyPlanningSkill';
@@ -141,9 +142,40 @@ export async function bulkCreateTasksV2(
   drafts: ScheduledTask[],
 ): Promise<BulkCreateResult> {
   const taskIds: string[] = [];
+  const projectCache = new Map<string, string>();
+  const dailyLogCache = new Map<string, string>();
+
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
-    const id = await createTaskV2(d.task, d.projectId);
+    let projectId = d.projectId;
+
+    // Auto-create Project if missing but rawProjectName exists
+    if (!projectId && d.rawProjectName) {
+      if (projectCache.has(d.rawProjectName)) {
+        projectId = projectCache.get(d.rawProjectName);
+      } else {
+        const newProj = await createProject(d.rawProjectName);
+        projectId = newProj.id;
+        projectCache.set(d.rawProjectName, projectId);
+      }
+    }
+
+    // Auto-create/link Daily Log
+    let dailyLogId: string | undefined;
+    if (d.task.properties.Date && d.task.properties.Date.start) {
+      const dateStr = d.task.properties.Date.start.split('T')[0];
+      if (dateStr) {
+        if (dailyLogCache.has(dateStr)) {
+          dailyLogId = dailyLogCache.get(dateStr);
+        } else {
+          const logPage = await getOrCreateDailyLog(dateStr);
+          dailyLogId = logPage.id;
+          if (dailyLogId) dailyLogCache.set(dateStr, dailyLogId);
+        }
+      }
+    }
+
+    const id = await createTaskV2(d.task, projectId, dailyLogId);
     taskIds.push(id);
     // Throttle 200ms between API calls to avoid Notion rate limits (HTTP 429)
     if (i < drafts.length - 1) {
