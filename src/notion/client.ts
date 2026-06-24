@@ -29,6 +29,11 @@ function getDate(page: NotionPage, prop: string): string {
   return p?.date?.start ?? '';
 }
 
+function getDateEnd(page: NotionPage, prop: string): string | undefined {
+  const p = page.properties[prop] as { date?: { end?: string } };
+  return p?.date?.end;
+}
+
 function getRelationId(page: NotionPage, prop: string): string | undefined {
   const p = page.properties[prop] as { relation?: Array<{ id: string }> };
   return p?.relation?.[0]?.id;
@@ -345,6 +350,7 @@ export async function fetchActiveTasksWithDates(
   return (response.results as NotionPage[]).map((p) => ({
     name: getTitle(p),
     start: getDate(p, 'Date'),
+    end: getDateEnd(p, 'Date'),
     estimate: getNumber(p, 'Estimate'),
   }));
 }

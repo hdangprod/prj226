@@ -61,7 +61,11 @@ function buildBusySlotsContext(gcalEvents: BusySlot[], notionTasks: NotionBusySl
   if (notionTasks.length > 0) {
     lines.push('--- Existing Notion Tasks ---');
     for (const t of notionTasks) {
-      lines.push(`• [Notion] "${t.name}" → starts ${t.start}, est. ${t.estimate}h`);
+      if (t.end) {
+        lines.push(`• [Notion] "${t.name}" → ${t.start} to ${t.end}`);
+      } else {
+        lines.push(`• [Notion] "${t.name}" → starts ${t.start}, est. ${t.estimate}h`);
+      }
     }
   }
 

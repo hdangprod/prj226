@@ -70,5 +70,6 @@ export interface WeeklyTaskV2 {
 export interface NotionBusySlot {
   name: string;
   start: string; // ISO 8601
+  end?: string;  // ISO 8601
   estimate: number;
 }
