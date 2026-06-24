@@ -364,8 +364,7 @@ export async function createTaskV2(
     const projectPage = await notion.pages.retrieve({ page_id: projectId }) as NotionPage;
     const actualProjectName = getTitle(projectPage);
     if (actualProjectName) {
-      const existingTasksCount = await countTasksInProject(projectId);
-      taskPrefix = `${actualProjectName}_T${existingTasksCount + 1}: `;
+      taskPrefix = `[${actualProjectName}] `;
     }
   }
 

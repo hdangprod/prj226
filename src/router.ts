@@ -44,58 +44,43 @@ function notionDeepLink(pageId: string): string {
 }
 
 function formatSchedulePreview(drafts: ScheduledTask[], gcalEvents: BusySlot[]): string {
-  const lines: string[] = ['🗓 <b>Smart Weekly Schedule Preview</b>\n'];
+  let totalHours = 0;
+  drafts.forEach(d => totalHours += (d.task.properties.Estimate || 0));
 
-  // Group tasks by day
-  const dayMap = new Map<string, ScheduledTask[]>();
+  const lines: string[] = [];
+  lines.push(`<b>KẾ HOẠCH TUẦN MỚI (WEEKLY PLANNING)</b>`);
+  lines.push(`Trợ lý AI đã bóc tách thành công ${drafts.length} công việc cho tuần tới. Tổng thời gian thực thi dự kiến: ${totalHours} giờ.`);
+
+  // Group by project
+  const projectMap = new Map<string, ScheduledTask[]>();
   for (const d of drafts) {
-    const dayStr = d.task.properties.Date.start.slice(0, 10);
-    if (!dayMap.has(dayStr)) dayMap.set(dayStr, []);
-    dayMap.get(dayStr)!.push(d);
+    const projName = d.rawProjectName || 'Other';
+    if (!projectMap.has(projName)) projectMap.set(projName, []);
+    projectMap.get(projName)!.push(d);
   }
 
-  // Group GCal events by day
-  const gcalDayMap = new Map<string, BusySlot[]>();
-  for (const e of gcalEvents) {
-    const dayStr = e.start.slice(0, 10);
-    if (!gcalDayMap.has(dayStr)) gcalDayMap.set(dayStr, []);
-    gcalDayMap.get(dayStr)!.push(e);
-  }
-
-  // Merge all days and sort
-  const allDays = new Set([...dayMap.keys(), ...gcalDayMap.keys()]);
-  const sortedDays = [...allDays].sort();
-
-  const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-
-  for (const day of sortedDays) {
-    const date = new Date(day + 'T00:00:00+08:00');
-    const dayName = dayNames[date.getDay()];
-    lines.push(`\n📅 <b>${dayName} — ${day}</b>`);
-
-    // Show GCal events first
-    const gcalItems = gcalDayMap.get(day) ?? [];
-    for (const e of gcalItems) {
-      const startTime = formatTime(e.start);
-      const endTime = formatTime(e.end);
-      lines.push(`  🔒 <i>${startTime}–${endTime}</i> ${escapeHtml(e.summary)}`);
-    }
-
-    // Show AI-scheduled tasks
-    const tasks = dayMap.get(day) ?? [];
+  let index = 1;
+  for (const [projName, tasks] of projectMap.entries()) {
+    lines.push(`\nProject: <b>${escapeHtml(projName)}</b>`);
+    lines.push(`───────────────────────`);
     for (const d of tasks) {
-      const startTime = formatTime(d.task.properties.Date.start);
-      const endTime = d.task.properties.Date.end ? formatTime(d.task.properties.Date.end) : '';
-      const timeRange = endTime ? `${startTime}–${endTime}` : startTime;
-      const priorityIcon = d.task.properties.Priority === 'High' ? '🔴' : d.task.properties.Priority === 'Medium' ? '🟡' : '🟢';
-      lines.push(
-        `  ${priorityIcon} <b>${timeRange}</b> ${escapeHtml(d.displayName)}` +
-        `\n     Est: ${d.task.properties.Estimate}h | ${d.task.properties.Priority}`
-      );
+      const dateStr = d.task.properties.Date.start.slice(0, 10).split('-').reverse().join('/');
+      const priority = d.task.properties.Priority;
+      const name = d.task.properties.Name;
+      const estimate = d.task.properties.Estimate;
+      let purpose = 'N/A';
+      if (d.task.content && d.task.content.Callout_Description) {
+        purpose = d.task.content.Callout_Description.replace('💡 **MỤC ĐÍCH:**', '').trim();
+      }
+
+      lines.push(`${index}. [${priority}] ${escapeHtml(name)}`);
+      lines.push(`• 📅 Hạn: ${dateStr} | ⏱️ Thời gian: ${estimate} giờ`);
+      lines.push(`• 🎯 Mục đích: ${escapeHtml(purpose)}`);
+      index++;
     }
   }
 
-  lines.push(`\n<i>Total: ${drafts.length} tasks scheduled</i>`);
+  lines.push(`\nTrạng thái nạp mặc định: Not Started`);
   return lines.join('\n');
 }
 
@@ -190,19 +175,17 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await deleteDraft(payloadStr);
         const result = await bulkCreateTasksV2(drafts);
 
-        const linkList = result.taskIds
-          .map((id, i) => `${i + 1}. <a href="${notionDeepLink(id)}">${BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION}</a>`)
+        const linkList = drafts
+          .map((d, i) => {
+            const taskName = d.rawProjectName ? `[${d.rawProjectName}] ${d.task.properties.Name}` : d.task.properties.Name;
+            return `${i + 1}. 📁 <a href="${notionDeepLink(result.taskIds[i])}">${escapeHtml(taskName)}</a>`;
+          })
           .join('\n');
 
         await editMessageText(
           chatId,
           message.message_id,
-          `${BOT_MESSAGES.SUCCESS.WEEKLY_SCHEDULE_CREATED(result.createdCount, drafts.length)}\n\n${linkList}`,
-          {
-            inline_keyboard: result.taskIds.slice(0, 3).map((id, i) => [
-              { text: BOT_MESSAGES.BUTTONS.OPEN_TASK(i + 1), url: notionDeepLink(id) },
-            ]),
-          }
+          `${BOT_MESSAGES.SUCCESS.WEEKLY_SCHEDULE_CREATED(result.createdCount, drafts.length)}\n\n${linkList}`
         );
 
       } else if (action === 'schedule_cancel') {
