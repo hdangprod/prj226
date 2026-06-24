@@ -1,6 +1,7 @@
 import { parseTaskInput, translateHighlight } from '../gemini/client';
 import {
   createTask,
+  createTaskV2,
   findProjectByName,
   getOrCreateDailyLog,
   getTaskPage,
@@ -13,7 +14,7 @@ import {
   countTasksInProject,
 } from '../notion/client';
 import type { TaskInput, TaskPage, GeminiTaskOutput } from '../notion/types';
-import type { PlannedTask } from '../skills/WeeklyPlanningSkill';
+import type { ScheduledTask } from '../skills/WeeklyPlanningSkill';
 
 // ─── Helpers ───
 
@@ -126,27 +127,27 @@ export async function rescueTask(): Promise<TaskPage | null> {
   return candidates.length > 0 ? candidates[0] : null;
 }
 
-// ─── FR-7: Plan Week Draft ───
-// Logic đã được chuyển sang src/skills/WeeklyPlanningSkill.ts
-
-// ─── FR-7: Bulk Create ───
+// ─── FR-7 V2: Bulk Create (Weekly Scheduler) ───
 
 export interface BulkCreateResult {
   createdCount: number;
   taskIds: string[];
 }
 
-export async function bulkCreateTasks(
-  drafts: PlannedTask[],
-  dailyLogId?: string
+/**
+ * V2: Bulk create tasks from ScheduledTask[] with throttling.
+ */
+export async function bulkCreateTasksV2(
+  drafts: ScheduledTask[],
 ): Promise<BulkCreateResult> {
   const taskIds: string[] = [];
-  for (const d of drafts) {
-    const id = await createTask(d.task, d.projectId, dailyLogId);
+  for (let i = 0; i < drafts.length; i++) {
+    const d = drafts[i];
+    const id = await createTaskV2(d.task, d.projectId);
     taskIds.push(id);
-    // Throttle 350ms between API calls to avoid Notion rate limits (HTTP 429)
-    if (drafts.indexOf(d) < drafts.length - 1) {
-      await delay(350);
+    // Throttle 200ms between API calls to avoid Notion rate limits (HTTP 429)
+    if (i < drafts.length - 1) {
+      await delay(200);
     }
   }
   return { createdCount: taskIds.length, taskIds };
