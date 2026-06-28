@@ -4,7 +4,9 @@ import { BOT_MESSAGES } from '../constants/messages';
 import { findProjectByName } from '../notion/client';
 import { fetchUpcomingEvents, type BusySlot } from '../google/client';
 import { fetchActiveTasksWithDates } from '../notion/client';
-import { saveDraft } from '../services/stateManager';
+import { saveDraft, getDailyProCalls, incrementDailyProCalls } from '../services/stateManager';
+import { hasTemporalOverlap } from '../services/weeklyScheduleValidator';
+import { MODELS } from '../config';
 import type { WeeklyTaskV2, NotionBusySlot } from '../notion/types';
 
 // ─── Interfaces ───
@@ -25,6 +27,8 @@ export interface WeeklyPlanningOutput {
   draftId: string;
   drafts: ScheduledTask[];
   gcalEvents: BusySlot[];
+  usedModel: string;
+  isFallback: boolean;
 }
 
 // ─── Helpers ───
@@ -98,11 +102,35 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
 
     // Phase 2: AI-Driven Execution Optimization
     let parsed: WeeklyTaskV2[];
+    let usedModel = MODELS.LITE;
+    let isFallback = false;
+    
     try {
-      parsed = await planWeeklySchedule(input.text, input.currentIsoTime, busySlotsContext);
+      // Step 2.1: Try Lite-First
+      parsed = await planWeeklySchedule(input.text, input.currentIsoTime, busySlotsContext, MODELS.LITE);
+      
+      // Step 2.2: Validate Lite output
+      if (hasTemporalOverlap(parsed)) {
+        throw new Error('Temporal overlap detected in LITE output.');
+      }
     } catch (error) {
-      const rawError = error instanceof Error ? error.message : String(error);
-      throw new Error(`${BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT} (Lỗi gốc: ${rawError})`);
+      console.warn('[WeeklyPlanning] LITE attempt failed, escalating to PRO:', error instanceof Error ? error.message : String(error));
+      
+      // Step 2.3: Escalate to PRO
+      const proCalls = await getDailyProCalls(todayStr);
+      if (proCalls >= 20) {
+        throw new Error(`${BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT} (Quota Exceeded: Đã hết lượt dùng PRO hôm nay)`);
+      }
+      
+      try {
+        parsed = await planWeeklySchedule(input.text, input.currentIsoTime, busySlotsContext, MODELS.PRO);
+        await incrementDailyProCalls(todayStr);
+        usedModel = MODELS.PRO;
+        isFallback = true;
+      } catch (proError) {
+        const rawError = proError instanceof Error ? proError.message : String(proError);
+        throw new Error(`${BOT_MESSAGES.ERRORS.AI_PLANNING_FAULT} (Lỗi gốc: ${rawError})`);
+      }
     }
 
     // Phase 3: Resolve project IDs
@@ -129,6 +157,6 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
     const draftId = newDraftId();
     await saveDraft(draftId, drafts);
 
-    return { draftId, drafts, gcalEvents };
+    return { draftId, drafts, gcalEvents, usedModel, isFallback };
   }
 }

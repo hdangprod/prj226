@@ -9,29 +9,52 @@ type: "rule"
 
 # Quy tắc Quản lý GitHub và Phối hợp với User
 
-## 1. Quy trình Khởi tạo (MANDATORY WORKFLOW)
-Trừ khi User nói rõ "không cần tạo issue/không cần theo workflow", AI bắt buộc phải tuân thủ đúng thứ tự 5 bước sau mỗi khi phát triển tính năng mới hoặc sửa bug:
+## 1. Phân Luồng Quy Trình Thực Thi (WORKFLOW ROUTING)
+AI phải tự động đánh giá quy mô của Task để chọn 1 trong 2 luồng xử lý sau:
 
-1. **Tạo GitHub Issue:** Sử dụng lệnh `gh issue create` với Title và Description rõ ràng (Context, DoD).
-2. **Checkout Branch:** Tạo và checkout sang nhánh riêng biệt có liên kết với Issue theo định dạng: `feature/[Issue-ID]-[tên-ngắn-gọn]` hoặc `bugfix/[Issue-ID]-[tên-ngắn-gọn]`. Tuyệt đối không code trực tiếp trên `main`.
-3. **Lập Implementation Plan:** Tạo một file Plan mới nằm trong thư mục `docs/plans/` với định dạng tên `issue-[ID]-[tên-ngắn-gọn].md` (vd: `docs/plans/issue-16-rollover-task.md`). Báo cáo với User và **DỪNG LẠI** chờ User đọc và xác nhận "Proceed/Đồng ý".
-4. **Tiến hành viết code:** Chỉ bắt đầu code sau khi User đã duyệt Plan.
-5. **Báo cáo và Pull Request:** Sau khi code và test (`npm run build`) thành công:
-   - Viết một "Implementation Report" chứa các technical steps đã làm và comment trực tiếp vào GitHub Issue (`gh issue comment`).
-   - Commit code theo chuẩn Semantic Commits và Push branch lên remote.
-   - Tạo Pull Request (`gh pr create`) và yêu cầu User vào duyệt (Merge).
+### A. Luồng Tiêu Chuẩn (Standard Flow)
+*Áp dụng cho: Tính năng mới (feat), Tái cấu trúc lớn (refactor), hoặc Sửa Bug phức tạp (fix).*
+AI bắt buộc phải tuân thủ đúng thứ tự 5 bước:
+1. **Tạo GitHub Issue:** Sử dụng lệnh `gh issue create` với Title và Description rõ ràng theo 5-W Framework ở Mục 3.
+2. **Checkout Branch:** Tạo và checkout sang nhánh riêng theo định dạng: `issue-[ID]-[tên-ngắn-gọn]` (Ví dụ: `issue-28-optimize-notion-throughput`). Tuyệt đối không code trên `main`.
+3. **Lập Implementation Plan:** Tạo file Plan tại `docs/plans/issue-[ID]-[tên-ngắn-gọn].md`. Báo cáo với User và **DỪNG LẠI** chờ từ khóa "Proceed" mới được code.
+4. **Tiến hành viết code:** Chỉ code sau khi User đã duyệt Plan.
+5. **Báo cáo và Pull Request:** Chạy `npm run build`, viết "Implementation Report" comment vào Issue, push code, tạo PR bằng `gh pr create` và chờ User merge.
+
+### B. Luồng Cấp Tốc (Fast-Track Flow / Hotfix)
+*Áp dụng cho: Sửa lỗi chính tả (typo), Thay đổi cấu hình nhỏ (config), Sửa khẩn cấp 1-2 dòng code (hotfix) không ảnh hưởng đến kiến trúc.*
+* **Quy trình tối giản:** Không cần tạo Issue, không cần lập Plan, không cần tạo PR.
+* **Thao tác:** AI được phép thực hiện sửa đổi trực tiếp trên nhánh `main` (hoặc tạo một nhánh temporary ngắn hạn rồi tự merge nếu hệ thống khóa master/main).
+* **Cam kết bảo mật dữ liệu:** Bắt buộc phải sử dụng Type là `fix(hotfix):` hoặc `docs(hotfix):` trong commit message và giải thích nhanh lý do sửa đổi trong nội dung commit để đảm bảo tính truy vết.
 
 ## 2. Quy định Viết Code & Technical Standards
-- **Commit Message**: Bắt buộc tuân thủ Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`):
-   - Cú pháp: `<type>(<scope>): <description> (#<issue_number>)`
-   - Ví dụ: `feat(notion): add auto-prefixing logic to task creation (#12)`
-- **Definition of Done (DoD)**: Một tính năng được gọi là "Done" khi:
-   1. Code chạy đúng spec, không bug.
-   2. Đã viết Unit Test bao phủ.
-   3. Đã cập nhật tài liệu (API Docs, README hoặc hệ thống Notion của bạn) nếu có thay đổi về kiến trúc.
-- **Đóng Issue**: Việc đóng Issue sẽ do GitHub tự động thực hiện khi User merge PR, AI không cần dùng lệnh `gh issue close` trừ khi được yêu cầu đặc biệt.
+- **Commit Message**: Bắt buộc tuân thủ Conventional Commits: `<type>(<scope>): <description> (#<issue_number>)`
+  *Ví dụ với Hotfix:* `fix(hotfix): fix typo in Telegram message template` (Nếu không có issue thì bỏ phần số hg)
+- **Definition of Done (DoD)**: Một tính năng/hotfix được gọi là "Done" khi:
+   1. Code chạy đúng spec, không bug, đã chạy thử nghiệm local.
+   2. Chạy lệnh kiểm tra biên dịch (`npm run build`) pass 100%.
+   3. Đã cập nhật tài liệu tương ứng nếu có thay đổi cấu trúc.
 
-## Boundaries (Ranh giới hành vi)
-- **ALWAYS**: Chạy lệnh kiểm tra biên dịch (`npm run build`) ở local trước khi báo cáo hoàn thành hoặc tạo commit.
-- **ASK FIRST**: Trước khi đóng hoàn toàn một Issue, hãy hỏi User xem họ đã test thử và hài lòng chưa.
-- **NEVER**: Tự ý đóng Issue khi chưa chạy test hoặc chưa có sự xác nhận của User về kết quả sửa lỗi.
+## 3. Tiêu chuẩn Viết Issue Description & Implementation Report
+Mọi comment ghi nhận (Issue hoặc PR Report thuộc Luồng Tiêu Chuẩn) phải tuân thủ cấu trúc 5 phần (The 5-W Framework):
+1. **🚨 Bối cảnh & Vấn đề (The Context & "Why now?"):** Hệ thống hiện tại ra sao? Điểm nghẽn/Lỗi là gì?
+2. **💡 Giải pháp & Tại sao chọn giải pháp này (The Trade-offs):** Giải pháp cụ thể và lý do chọn (Tại sao dùng cách này mà không dùng cách khác?).
+3. **🛠️ Danh sách file ảnh hưởng (Blast Radius):** Liệt kê chính xác các file đã/sẽ chỉnh sửa.
+4. **📈 Kế hoạch Scale-up tương lai (Future Proofing):** Lưu ý nếu sau này hệ thống mở rộng quy mô dữ liệu lớn hơn.
+5. **✅ Tiêu chí nghiệm thu (Definition of Done):** Checklist các bước để test tính năng.
+
+### C. Quy tắc Tự động Phân loại (Khi User không chỉ định Flow)
+Nếu User giao việc mà không nói rõ dùng "Standard" hay "Fast-Track", AI phải tự động phân tích dựa trên các tiêu chí sau:
+
+1. **AI TỰ ĐỘNG CHỌN FAST-TRACK KHI:**
+   - Prompt chỉ yêu cầu: Sửa lỗi chính tả (typo), cập nhật tài liệu (`README.md`, `docs/`), thay đổi text hiển thị của Bot, hoặc chỉnh sửa cấu hình nhỏ (thay đổi biến môi trường, file `.env`, `package.json`).
+   - Dự kiến vùng ảnh hưởng (Blast Radius) chỉ nằm trong 1 file duy nhất và thay đổi dưới 5 dòng code.
+
+2. **AI TỰ ĐỘNG CHỌN STANDARD KHI:**
+   - Prompt yêu cầu: Viết tính năng mới, kết nối API mới, thay đổi cấu trúc dữ liệu cơ sở dữ liệu (Firestore, Notion), viết Unit Test, hoặc tái cấu trúc (refactor) logic cốt lõi.
+   - Vùng ảnh hưởng liên quan đến nhiều file hoặc có nguy cơ làm crash hệ thống hiện tại.
+
+3. **CƠ CHẾ HOÀN TÁC (FALLBACK):**
+   - Nếu ở ranh giới mập mờ (Ambiguous) không rõ lớn hay nhỏ, AI BẮT BUỘC phải chọn **Standard Flow** để đảm bảo an toàn cho mã nguồn, HOẶC đưa ra một câu hỏi nhanh: *"Task này Sếp muốn đi theo Luồng Tiêu Chuẩn hay làm Hotfix nhanh trên main luôn?"*
+---
+⚠️ **AI Self-Check Rule (Chống Quên):** Trước khi trả lời User hoặc thực hiện bất kỳ lệnh Git nào, AI phải tự đối chiếu hành động của mình với file Quy tắc này. Nếu phát hiện vi phạm quy trình, phải tự động sửa sai trước khi xuất dữ liệu ra màn hình.

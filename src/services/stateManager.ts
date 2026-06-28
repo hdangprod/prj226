@@ -4,6 +4,7 @@ import type { TaskInput } from '../notion/types';
 
 const DB_PLAN_DRAFTS = 'plan_drafts';
 const DB_USER_SESSIONS = 'user_sessions';
+const DB_SYSTEM_STATS = 'system_stats';
 const DRAFT_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const db = new Firestore();
@@ -62,3 +63,27 @@ export async function loadSession(chatId: number | string): Promise<UserSession 
 export async function deleteSession(chatId: number | string): Promise<void> {
   await db.collection(DB_USER_SESSIONS).doc(String(chatId)).delete();
 }
+
+// ─── System Stats ───
+
+export async function incrementDailyProCalls(date: string): Promise<number> {
+  const docRef = db.collection(DB_SYSTEM_STATS).doc(`proCalls_${date}`);
+  const doc = await docRef.get();
+  
+  if (!doc.exists) {
+    await docRef.set({ count: 1 });
+    return 1;
+  }
+  
+  const currentCount = doc.data()?.count || 0;
+  await docRef.update({ count: currentCount + 1 });
+  return currentCount + 1;
+}
+
+export async function getDailyProCalls(date: string): Promise<number> {
+  const docRef = db.collection(DB_SYSTEM_STATS).doc(`proCalls_${date}`);
+  const doc = await docRef.get();
+  if (!doc.exists) return 0;
+  return doc.data()?.count || 0;
+}
+
