@@ -110,7 +110,7 @@ export class WeeklyPlanningSkill implements AgentSkill<WeeklyPlanningInput, Week
       parsed = await planWeeklySchedule(input.text, input.currentIsoTime, busySlotsContext, MODELS.LITE);
       
       // Step 2.2: Validate Lite output
-      if (hasTemporalOverlap(parsed)) {
+      if (hasTemporalOverlap(parsed, gcalEvents, notionTasks)) {
         throw new Error('Temporal overlap detected in LITE output.');
       }
     } catch (error) {
