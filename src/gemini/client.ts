@@ -222,7 +222,8 @@ const weeklyScheduleV2Schema: Schema = {
 export async function planWeeklySchedule(
   userInput: string,
   currentIsoTime: string,
-  busySlotsContext: string
+  busySlotsContext: string,
+  forceModel?: string
 ): Promise<WeeklyTaskV2[]> {
 
   const systemPrompt = `
@@ -257,7 +258,7 @@ User's rough weekly plan:
 "${userInput}"
 `;
 
-  let currentModelName = MODELS.PRO;
+  let currentModelName = forceModel || MODELS.PRO;
   const MAX_RETRIES = 2;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {

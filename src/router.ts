@@ -21,8 +21,9 @@ import {
   createTask,
   addResource
 } from './notion/client';
-import { saveDraft, loadDraft, deleteDraft, saveSession, loadSession, deleteSession } from './services/stateManager';
+import { saveDraft, loadDraft, deleteDraft, saveSession, loadSession, deleteSession, getDailyProCalls } from './services/stateManager';
 import { parseTaskInput, classifyResource } from './gemini/client';
+import { MODELS } from './config';
 
 interface TelegramUpdate {
   message?: {
@@ -43,13 +44,32 @@ function notionDeepLink(pageId: string): string {
   return `https://notion.so/${pageId.replace(/-/g, '')}`;
 }
 
-function formatSchedulePreview(drafts: ScheduledTask[], gcalEvents: BusySlot[]): string {
+function formatSchedulePreview(
+  drafts: ScheduledTask[], 
+  gcalEvents: BusySlot[],
+  usedModel: string,
+  isFallback: boolean,
+  proCalls: number
+): string {
   let totalHours = 0;
   drafts.forEach(d => totalHours += (d.task.properties.Estimate || 0));
 
   const lines: string[] = [];
   lines.push(`<b>KẾ HOẠCH TUẦN MỚI (WEEKLY PLANNING)</b>`);
+  
+  let aiIndicator = '';
+  if (usedModel === MODELS.LITE) {
+    aiIndicator = '🟢 LITE Optimized';
+  } else if (usedModel === MODELS.PRO) {
+    aiIndicator = isFallback ? '⚡ LITE Fallback (Escalated to PRO)' : '⭐ PRO Optimized';
+  }
+  
+  if (usedModel === MODELS.PRO && proCalls >= 15) {
+    aiIndicator += `\n⚠️ Cảnh báo: Quota PRO sắp cạn (${proCalls}/20)`;
+  }
+
   lines.push(`Trợ lý AI đã bóc tách thành công ${drafts.length} công việc cho tuần tới. Tổng thời gian thực thi dự kiến: ${totalHours} giờ.`);
+  lines.push(`🤖 AI Routing: ${aiIndicator}`);
 
   // Group by project
   const projectMap = new Map<string, ScheduledTask[]>();
@@ -512,12 +532,13 @@ export async function handleUpdate(body: unknown): Promise<void> {
         await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_WEEKLY_PLAN);
         
         const skill = new WeeklyPlanningSkill();
-        const { draftId, drafts, gcalEvents } = await skill.execute({ text: input, currentIsoTime: getCurrentIsoTime() });
+        const { draftId, drafts, gcalEvents, usedModel, isFallback } = await skill.execute({ text: input, currentIsoTime: getCurrentIsoTime() });
+        const proCalls = await getDailyProCalls(today);
         
         if (drafts.length === 0) {
           await sendMessage(chatId, BOT_MESSAGES.ERRORS.NO_TASK_FOUND);
         } else {
-          await sendMessage(chatId, formatSchedulePreview(drafts, gcalEvents), {
+          await sendMessage(chatId, formatSchedulePreview(drafts, gcalEvents, usedModel, isFallback, proCalls), {
             inline_keyboard: [
               [
                 { text: BOT_MESSAGES.BUTTONS.APPROVE_SCHEDULE, callback_data: `schedule_confirm:${draftId}` },
