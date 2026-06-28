@@ -1,6 +1,21 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+// Hỗ trợ GCP Secret Manager: 
+// Nếu Sếp map Secret JSON vào biến môi trường APP_SECRETS, hệ thống sẽ tự động bóc tách.
+if (process.env.APP_SECRETS) {
+  try {
+    const secrets = JSON.parse(process.env.APP_SECRETS);
+    for (const [key, value] of Object.entries(secrets)) {
+      if (typeof value === 'string') {
+        process.env[key] = value;
+      }
+    }
+  } catch (err) {
+    console.error('[Config] Failed to parse APP_SECRETS JSON:', err);
+  }
+}
+
 const REQUIRED_ENV_VARS = [
   'TELEGRAM_BOT_TOKEN',
   'NOTION_API_KEY',
