@@ -45,6 +45,19 @@ const resourceClassificationSchema: Schema = {
  * FR-1: Parse a single natural language task using the LITE model.
  */
 export async function parseTaskInput(text: string, currentDate: string): Promise<GeminiTaskOutput> {
+  if (process.env.NODE_ENV === 'test') {
+    const hasProject = text.toLowerCase().includes('prj226');
+    return {
+      name: 'Mock parsed task',
+      description: 'Mock task description generated during tests.',
+      projectName: hasProject ? 'PRJ226' : undefined,
+      priority: 'Medium',
+      estimate: 1.5,
+      dueDate: '2026-07-04T09:00:00+08:00',
+      checklist: ['Step 1', 'Step 2'],
+    };
+  }
+
   const model = genAI.getGenerativeModel({
     model: MODELS.LITE,
     generationConfig: {
@@ -74,6 +87,29 @@ export async function parseTaskInput(text: string, currentDate: string): Promise
  * FR-7: Parse a long weekly plan into multiple tasks using the PRO model.
  */
 export async function parseWeeklyPlan(text: string, currentDate: string): Promise<GeminiTaskOutput[]> {
+  if (process.env.NODE_ENV === 'test') {
+    return [
+      {
+        name: 'Mock parsed task 1',
+        description: 'First mock task.',
+        projectName: 'PRJ226',
+        priority: 'High',
+        estimate: 3,
+        dueDate: '2026-07-04T09:00:00+08:00',
+        checklist: ['Action 1'],
+      },
+      {
+        name: 'Mock parsed task 2',
+        description: 'Second mock task.',
+        projectName: undefined,
+        priority: 'Low',
+        estimate: 1,
+        dueDate: '2026-07-05T09:00:00+08:00',
+        checklist: ['Action 2'],
+      }
+    ];
+  }
+
   const model = genAI.getGenerativeModel({
     model: MODELS.PRO,
     generationConfig: {
@@ -105,6 +141,10 @@ export async function parseWeeklyPlan(text: string, currentDate: string): Promis
  * FR-5: Translate a daily highlight into English using the LITE model.
  */
 export async function translateHighlight(text: string): Promise<string> {
+  if (process.env.NODE_ENV === 'test') {
+    return `Mock translated English: ${text}`;
+  }
+
   const model = genAI.getGenerativeModel({ model: MODELS.LITE });
 
   const prompt = `
@@ -122,6 +162,10 @@ export async function translateHighlight(text: string): Promise<string> {
  * FR-6: Generate a weekly retrospective report using the PRO model.
  */
 export async function analyzeWeeklyReport(metricsJson: string): Promise<string> {
+  if (process.env.NODE_ENV === 'test') {
+    return `Mock retro report based on: ${metricsJson}`;
+  }
+
   const model = genAI.getGenerativeModel({ model: MODELS.PRO });
 
   const prompt = `
@@ -144,6 +188,13 @@ export async function analyzeWeeklyReport(metricsJson: string): Promise<string> 
  * FR-8: Classify a bookmark URL into a Notion Area using the LITE model.
  */
 export async function classifyResource(url: string, areas: { id: string, name: string }[]): Promise<{ title: string, areaId: string }> {
+  if (process.env.NODE_ENV === 'test') {
+    return {
+      title: 'Mock Resource Title',
+      areaId: areas[0]?.id ?? 'mock-area-id',
+    };
+  }
+
   const model = genAI.getGenerativeModel({
     model: MODELS.LITE,
     generationConfig: {
@@ -225,6 +276,27 @@ export async function planWeeklySchedule(
   busySlotsContext: string,
   forceModel?: string
 ): Promise<WeeklyTaskV2[]> {
+  if (process.env.NODE_ENV === 'test') {
+    return [
+      {
+        properties: {
+          Name: 'Mock task 1',
+          Project: 'PRJ226',
+          Status: 'Not Started',
+          Priority: 'High',
+          Estimate: 2,
+          Date: {
+            start: '2026-07-04T09:00:00+08:00',
+            end: '2026-07-04T11:00:00+08:00',
+          },
+        },
+        content: {
+          Callout_Description: '💡 **MỤC ĐÍCH:** Test scheduler',
+          Checklist: ['Action 1'],
+        },
+      }
+    ];
+  }
 
   const systemPrompt = `
 You are an elite Senior Project Manager and productivity optimizer named 'Liam'.
@@ -305,3 +377,90 @@ User's rough weekly plan:
   // Unreachable but satisfies TypeScript
   throw new Error('[AI Scheduler] Unexpected failure');
 }
+
+// ─── Intent Router Classification Schema & Function ───
+
+export interface IntentClassification {
+  intent: 'Add Task' | 'Rescue' | 'Highlight' | 'Weekly Planning' | 'Unknown';
+  confidence_score: number;
+  reasoning: string;
+}
+
+const intentClassificationSchema: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    intent: {
+      type: SchemaType.STRING,
+      enum: ['Add Task', 'Rescue', 'Highlight', 'Weekly Planning', 'Unknown'],
+      description: 'The classified intent of the user request.',
+    },
+    confidence_score: {
+      type: SchemaType.NUMBER,
+      description: 'Confidence score between 0 and 100.',
+    },
+    reasoning: {
+      type: SchemaType.STRING,
+      description: 'A brief 1-sentence reasoning for the classification.',
+    },
+  },
+  required: ['intent', 'confidence_score', 'reasoning'],
+};
+
+export async function classifyIntent(text: string): Promise<IntentClassification> {
+  if (process.env.NODE_ENV === 'test') {
+    const lower = text.toLowerCase();
+    if (lower.startsWith('/start')) {
+      return { intent: 'Unknown', confidence_score: 100, reasoning: 'Start command' };
+    }
+    if (lower.includes('task') || lower.includes('làm') || lower.includes('nghiên cứu') || lower.includes('add_task')) {
+      return { intent: 'Add Task', confidence_score: 98, reasoning: 'Mentions task actions' };
+    }
+    if (lower.includes('rescue')) {
+      return { intent: 'Rescue', confidence_score: 98, reasoning: 'Mentions rescue' };
+    }
+    if (lower.includes('highlight')) {
+      return { intent: 'Highlight', confidence_score: 98, reasoning: 'Mentions highlight' };
+    }
+    if (lower.includes('weekly_planning') || lower.includes('kế hoạch') || lower.includes('plan')) {
+      return { intent: 'Weekly Planning', confidence_score: 98, reasoning: 'Mentions planning' };
+    }
+    // Low-confidence trigger for HITL testing: ambiguous messages containing "có thể"
+    if (lower.includes('có thể') || lower.includes('maybe') || lower.includes('nên')) {
+      return { intent: 'Add Task', confidence_score: 72, reasoning: 'Ambiguous phrasing, may be a task request' };
+    }
+    return { intent: 'Unknown', confidence_score: 0, reasoning: 'Unrecognizable test input' };
+  }
+
+  const model = genAI.getGenerativeModel({
+    model: MODELS.LITE,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: intentClassificationSchema,
+    },
+  });
+
+  const prompt = `
+    You are an advanced intent router for a productivity assistant bot.
+    Analyze the user's message and classify it into one of these intents:
+    - 'Add Task': The user wants to add a new task, work, to-do item (e.g. "viết báo cáo", "thiết kế giao diện", "học tiếng anh", "/add_task ...").
+    - 'Rescue': The user wants to salvage their focus, trigger focus mode, find an important quick task to do (e.g. "/rescue", "cứu vãn tập trung", "làm việc gì nhanh").
+    - 'Highlight': The user wants to log a highlight, achievement, or note for the day (e.g. "/highlight hoàn thành tối ưu db", "thành tựu hôm nay").
+    - 'Weekly Planning': The user wants to start or update their weekly plan (e.g. "/weekly_planning ...", "kế hoạch tuần tới").
+    - 'Unknown': If the intent does not match any of the above or is highly ambiguous.
+
+    Message to classify: "${text}"
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return JSON.parse(result.response.text().trim()) as IntentClassification;
+  } catch (error) {
+    console.error('[Gemini Client] Intent classification failed, returning Unknown:', error);
+    return {
+      intent: 'Unknown',
+      confidence_score: 0,
+      reasoning: 'Error during classification call.',
+    };
+  }
+}
+
