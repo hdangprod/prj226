@@ -15,6 +15,10 @@ export interface UserSession {
   pendingTaskId?: string;
   originalText?: string;
   candidateIntents?: string[];
+  // HITL-specific fields (used when state === 'AWAITING_HITL_CONFIRMATION')
+  classifiedIntent?: string;
+  confidenceScore?: number;
+  reasoning?: string;
 }
 
 const DB_PLAN_DRAFTS = 'plan_drafts';

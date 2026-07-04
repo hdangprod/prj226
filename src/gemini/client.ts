@@ -424,7 +424,11 @@ export async function classifyIntent(text: string): Promise<IntentClassification
     if (lower.includes('weekly_planning') || lower.includes('kế hoạch') || lower.includes('plan')) {
       return { intent: 'Weekly Planning', confidence_score: 98, reasoning: 'Mentions planning' };
     }
-    return { intent: 'Unknown', confidence_score: 50, reasoning: 'Ambiguous test input' };
+    // Low-confidence trigger for HITL testing: ambiguous messages containing "có thể"
+    if (lower.includes('có thể') || lower.includes('maybe') || lower.includes('nên')) {
+      return { intent: 'Add Task', confidence_score: 72, reasoning: 'Ambiguous phrasing, may be a task request' };
+    }
+    return { intent: 'Unknown', confidence_score: 0, reasoning: 'Unrecognizable test input' };
   }
 
   const model = genAI.getGenerativeModel({

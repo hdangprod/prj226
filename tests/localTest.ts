@@ -32,7 +32,7 @@ function mockRes() {
 }
 
 async function runTests() {
-  console.log('=== Starting Offline Integration Tests (Slice 1, 2 & 3) ===\n');
+  console.log('=== Starting Offline Integration Tests (Slice 1-4) ===\n');
 
   try {
     // ─── SLICE 1 TESTS ───
@@ -260,6 +260,133 @@ async function runTests() {
       throw new Error(`Test 8 Failed: Final message should confirm task creation, got: "${lastMsg.text}"`);
     }
     console.log('✅ Test 8 passed successfully!\n');
+
+    // ─── SLICE 4 TESTS ───
+    console.log('--- Test 9: Low-Confidence Intent Triggers HITL Keyboard ---');
+    clearSentMessages();
+    const reqAmbiguous: any = {
+      path: '/webhook',
+      body: {
+        message: {
+          chat: { id: 999999 },
+          text: 'có thể cần viết email cho khách hàng',
+          message_id: 1009,
+        },
+      },
+    };
+    const resAmbiguous = mockRes();
+    await helloHttp(reqAmbiguous, resAmbiguous);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    // Should produce exactly 1 message: the HITL clarification with inline keyboard
+    if (sentMessages.length !== 1) {
+      throw new Error(`Test 9 Failed: Expected 1 HITL message, got ${sentMessages.length}`);
+    }
+    if (!sentMessages[0].text.includes('chưa chắc chắn')) {
+      throw new Error(`Test 9 Failed: HITL message should mention uncertainty, got: "${sentMessages[0].text}"`);
+    }
+    // Verify inline keyboard has intent options + cancel button
+    const hitlKeyboard = sentMessages[0].replyMarkup?.inline_keyboard;
+    if (!hitlKeyboard || hitlKeyboard.length < 3) {
+      throw new Error(`Test 9 Failed: Expected at least 3 keyboard rows (intents + cancel), got ${hitlKeyboard?.length}`);
+    }
+    // Last button must be the cancel button
+    const lastRow = hitlKeyboard[hitlKeyboard.length - 1];
+    if (!lastRow[0] || lastRow[0].callback_data !== 'hitl_cancel') {
+      throw new Error(`Test 9 Failed: Last keyboard row should be cancel button, got: ${JSON.stringify(lastRow)}`);
+    }
+
+    // Verify session was persisted
+    const hitlSession = await loadSession(999999);
+    if (!hitlSession || hitlSession.state !== 'AWAITING_HITL_CONFIRMATION') {
+      throw new Error(`Test 9 Failed: Session should be AWAITING_HITL_CONFIRMATION, got: ${JSON.stringify(hitlSession)}`);
+    }
+    console.log('✅ Test 9 passed successfully!\n');
+
+
+    console.log('--- Test 10: HITL Confirm Callback Routes Intent ---');
+    clearSentMessages();
+    const reqHitlConfirm: any = {
+      path: '/webhook',
+      body: {
+        callback_query: {
+          id: 'cb-hitl-confirm',
+          message: {
+            chat: { id: 999999 },
+            message_id: 1010,
+          },
+          data: 'hitl_confirm:Add Task',
+        },
+      },
+    };
+    const resHitlConfirm = mockRes();
+    await helloHttp(reqHitlConfirm, resHitlConfirm);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    // Should produce messages: editMessageText confirmation + task flow messages
+    if (sentMessages.length < 2) {
+      throw new Error(`Test 10 Failed: Expected at least 2 messages (confirm + task), got ${sentMessages.length}`);
+    }
+    if (!sentMessages[0].text.includes('Đã xác nhận')) {
+      throw new Error(`Test 10 Failed: First message should confirm intent, got: "${sentMessages[0].text}"`);
+    }
+
+    // Verify the HITL session was consumed and replaced by a task flow session
+    // (because the text has no project match, it enters AWAITING_PROJECT_SELECTION)
+    const postHitlSession = await loadSession(999999);
+    if (!postHitlSession || postHitlSession.state === 'AWAITING_HITL_CONFIRMATION') {
+      throw new Error(`Test 10 Failed: HITL session should be consumed and replaced by task flow, got: ${JSON.stringify(postHitlSession)}`);
+    }
+    if (postHitlSession.state !== 'AWAITING_PROJECT_SELECTION') {
+      throw new Error(`Test 10 Failed: Expected AWAITING_PROJECT_SELECTION after confirm routing, got: ${postHitlSession.state}`);
+    }
+    // Clean up for next test
+    const { deleteSession } = require('../src/tools/firestoreClient');
+    await deleteSession(999999);
+    console.log('✅ Test 10 passed successfully!\n');
+
+
+    console.log('--- Test 11: HITL Cancel Callback Clears Session ---');
+    // First, create a fresh HITL session for a different chat
+    await saveSession(777777, {
+      state: 'AWAITING_HITL_CONFIRMATION',
+      originalText: 'test cancel intent',
+      classifiedIntent: 'Rescue',
+      confidenceScore: 60,
+      reasoning: 'Test reasoning',
+    });
+    clearSentMessages();
+    const reqHitlCancel: any = {
+      path: '/webhook',
+      body: {
+        callback_query: {
+          id: 'cb-hitl-cancel',
+          message: {
+            chat: { id: 777777 },
+            message_id: 1011,
+          },
+          data: 'hitl_cancel',
+        },
+      },
+    };
+    const resHitlCancel = mockRes();
+    await helloHttp(reqHitlCancel, resHitlCancel);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    // Should produce editMessageText with "Cancelled."
+    if (sentMessages.length !== 1) {
+      throw new Error(`Test 11 Failed: Expected 1 message (cancelled), got ${sentMessages.length}`);
+    }
+    if (!sentMessages[0].text.includes('Cancelled')) {
+      throw new Error(`Test 11 Failed: Message should say Cancelled, got: "${sentMessages[0].text}"`);
+    }
+
+    // Verify session was deleted
+    const cancelledSession = await loadSession(777777);
+    if (cancelledSession !== null) {
+      throw new Error(`Test 11 Failed: Session should be deleted after cancel, got: ${JSON.stringify(cancelledSession)}`);
+    }
+    console.log('✅ Test 11 passed successfully!\n');
 
   } catch (error) {
     console.error('❌ Test execution failed:', error);
