@@ -1,9 +1,20 @@
-import { sendMessage, escapeHtml } from '../tools/telegramClient';
+import { sendMessage, editMessageText, answerCallbackQuery, escapeHtml } from '../tools/telegramClient';
+import { classifyIntent } from '../gemini/client';
+import { executeTaskCapture } from '../skills/taskCaptureSkill';
+import {
+  saveSession,
+  loadSession,
+  deleteSession,
+} from '../tools/firestoreClient';
+import {
+  fetchActiveProjects,
+  fetchAreas,
+  createProject,
+  createTask,
+  getOrCreateDailyLog,
+} from '../tools/notionClient';
 import { BOT_MESSAGES } from '../constants/messages';
 
-/**
- * Extracts the chatId from a Telegram update payload.
- */
 function extractChatId(payload: any): number | string | undefined {
   if (payload?.message?.chat?.id) {
     return payload.message.chat.id;
@@ -14,40 +25,214 @@ function extractChatId(payload: any): number | string | undefined {
   return undefined;
 }
 
-/**
- * The core worker payload handler. Completely wrapped in a global try-catch
- * to guarantee that unhandled errors are reported back to the user on Telegram.
- */
+function notionDeepLink(pageId: string): string {
+  return `https://notion.so/${pageId.replace(/-/g, '')}`;
+}
+
+function getTodayStr(): string {
+  // Timezone +08:00
+  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+function getCurrentIsoTime(): string {
+  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
+  return d.toISOString().replace('Z', '+08:00');
+}
+
 export async function handleWorkerPayload(payload: any): Promise<void> {
   const chatId = extractChatId(payload);
+  if (!chatId) {
+    console.error('[Worker] Chat ID could not be extracted from payload:', JSON.stringify(payload));
+    return;
+  }
 
   try {
-    const messageText = payload?.message?.text?.trim();
+    // ─── Case 1: Callback Queries (Inline Button Presses) ───
+    if (payload.callback_query) {
+      const { data, message, id: callbackId } = payload.callback_query;
+      const colonIndex = data.indexOf(':');
+      let action = data;
+      let actionPayload = '';
+      if (colonIndex !== -1) {
+        action = data.substring(0, colonIndex);
+        actionPayload = data.substring(colonIndex + 1);
+      }
 
-    if (messageText && messageText.startsWith('/start')) {
-      if (chatId) {
-        await sendMessage(chatId, BOT_MESSAGES.GREETINGS.WELCOME);
+      console.log(`[Worker] Processing callback query action: ${action}, payload: ${actionPayload}`);
+
+      if (action === 'addtask_proj') {
+        const session = await loadSession(chatId);
+        if (!session || session.state !== 'AWAITING_PROJECT_SELECTION' || !session.taskInput) {
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
+          return;
+        }
+
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.CREATING_TASK_SINGLE);
+        await deleteSession(chatId);
+
+        const dailyLog = await getOrCreateDailyLog(getTodayStr());
+        const taskId = await createTask(session.taskInput, actionPayload, dailyLog.id);
+        const deepLink = notionDeepLink(taskId);
+
+        await editMessageText(
+          chatId,
+          message.message_id,
+          BOT_MESSAGES.SUCCESS.TASK_CREATED,
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
+        );
+      } else if (action === 'addtask_newproj') {
+        const session = await loadSession(chatId);
+        if (!session || session.state !== 'AWAITING_PROJECT_SELECTION') {
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
+          return;
+        }
+
+        await answerCallbackQuery(callbackId);
+        session.state = 'AWAITING_PROJECT_NAME';
+        await saveSession(chatId, session);
+
+        await editMessageText(
+          chatId,
+          message.message_id,
+          BOT_MESSAGES.PROMPTS.ENTER_PROJECT_NAME
+        );
+      } else if (action === 'addtask_area') {
+        const session = await loadSession(chatId);
+        if (!session || session.state !== 'AWAITING_AREA_SELECTION' || !session.pendingProjectName || !session.taskInput) {
+          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
+          return;
+        }
+
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
+        const areas = await fetchAreas();
+        const selectedArea = areas.find(a => a.id === actionPayload);
+        const areaName = selectedArea ? selectedArea.name : 'Unknown';
+
+        const newProj = await createProject(session.pendingProjectName, actionPayload);
+        session.taskInput.projectName = newProj.name;
+
+        const dailyLog = await getOrCreateDailyLog(getTodayStr());
+        const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
+        const deepLink = notionDeepLink(taskId);
+
+        await deleteSession(chatId);
+
+        try {
+          await editMessageText(chatId, message.message_id, BOT_MESSAGES.PROMPTS.CHOOSE_AREA(escapeHtml(newProj.name)));
+        } catch (e) {
+          console.error('[Worker] Failed to remove inline keyboard:', e);
+        }
+
+        await sendMessage(
+          chatId,
+          BOT_MESSAGES.SUCCESS.TASK_CREATED_FULL(escapeHtml(newProj.name), escapeHtml(areaName)),
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
+        );
       }
       return;
     }
 
-    // Default placeholder for other commands until Slices are added
-    if (chatId && messageText) {
-      await sendMessage(chatId, `Received: "${escapeHtml(messageText)}". Intent classification will be added in subsequent slices.`);
+    // ─── Case 2: Text Messages ───
+    const text = payload?.message?.text?.trim();
+    if (!text) return;
+
+    // A. Check active session state first
+    const session = await loadSession(chatId);
+    if (session) {
+      if (session.state === 'AWAITING_PROJECT_NAME') {
+        if (text.startsWith('/')) {
+          await deleteSession(chatId);
+          await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
+        } else {
+          const projectName = text;
+          const areas = await fetchAreas();
+
+          session.state = 'AWAITING_AREA_SELECTION';
+          session.pendingProjectName = projectName;
+          await saveSession(chatId, session);
+
+          const keyboard: any[][] = [];
+          for (const area of areas) {
+            keyboard.push([{ text: `🏷 ${area.name}`, callback_data: `addtask_area:${area.id}` }]);
+          }
+
+          await sendMessage(
+            chatId,
+            BOT_MESSAGES.PROMPTS.CHOOSE_AREA(escapeHtml(projectName)),
+            { inline_keyboard: keyboard }
+          );
+        }
+        return;
+      }
     }
-  } catch (error) {
-    console.error('[Worker] Global Catch - Unhandled error:', error);
-    
-    if (chatId) {
-      try {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+
+    // B. Default Router Logic (No active session)
+    if (text.startsWith('/start')) {
+      await sendMessage(chatId, BOT_MESSAGES.GREETINGS.WELCOME);
+      return;
+    }
+
+    // Classify intent using Gemini LITE
+    const classification = await classifyIntent(text);
+    console.log(`[Worker] Intent Classification: ${JSON.stringify(classification)}`);
+
+    if (classification.intent === 'Add Task' && classification.confidence_score >= 95) {
+      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_TASK);
+      
+      const captureResult = await executeTaskCapture(text, getCurrentIsoTime(), getTodayStr());
+      
+      if (captureResult.status === 'success' && captureResult.taskId) {
+        const deepLink = notionDeepLink(captureResult.taskId);
         await sendMessage(
           chatId,
-          BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errorMsg))
+          BOT_MESSAGES.SUCCESS.TASK_CREATED,
+          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
         );
-      } catch (tgError) {
-        console.error('[Worker] Global Catch - Failed to send Telegram error message:', tgError);
+      } else if (captureResult.status === 'needs_project_selection' && captureResult.taskInput) {
+        const activeProjects = await fetchActiveProjects();
+
+        if (activeProjects.length > 0) {
+          await saveSession(chatId, { state: 'AWAITING_PROJECT_SELECTION', taskInput: captureResult.taskInput });
+          
+          const keyboard: any[][] = [];
+          for (const proj of activeProjects) {
+            keyboard.push([{ text: `📁 ${proj.name}`, callback_data: `addtask_proj:${proj.id}` }]);
+          }
+          keyboard.push([{ text: '➕ Tạo Project mới', callback_data: 'addtask_newproj' }]);
+
+          await sendMessage(
+            chatId,
+            BOT_MESSAGES.SUCCESS.TASK_ANALYZED(escapeHtml(captureResult.taskInput.name)) + '\n' + BOT_MESSAGES.PROMPTS.CHOOSE_PROJECT,
+            { inline_keyboard: keyboard }
+          );
+        } else {
+          await saveSession(chatId, { state: 'AWAITING_PROJECT_NAME', taskInput: captureResult.taskInput });
+          await sendMessage(
+            chatId,
+            BOT_MESSAGES.SUCCESS.TASK_ANALYZED(escapeHtml(captureResult.taskInput.name)) + '\n' + BOT_MESSAGES.PROMPTS.NO_PROJECT_PROMPT
+          );
+        }
       }
+      return;
+    }
+
+    // Default catch-all
+    await sendMessage(
+      chatId,
+      BOT_MESSAGES.ERRORS.UNKNOWN_COMMAND
+    );
+
+  } catch (error) {
+    console.error('[Worker] Global Catch - Unhandled error:', error);
+    try {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await sendMessage(
+        chatId,
+        BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errorMsg))
+      );
+    } catch (tgError) {
+      console.error('[Worker] Global Catch - Failed to send Telegram error message:', tgError);
     }
   }
 }
