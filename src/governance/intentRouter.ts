@@ -1,6 +1,7 @@
 import { sendMessage, editMessageText, answerCallbackQuery, escapeHtml } from '../tools/telegramClient';
 import { classifyIntent } from '../gemini/client';
 import { executeTaskCapture } from '../skills/taskCaptureSkill';
+import { transcribeVoiceNote } from '../sensors/voiceProcessor';
 import {
   saveSession,
   loadSession,
@@ -133,8 +134,19 @@ export async function handleWorkerPayload(payload: any): Promise<void> {
       return;
     }
 
-    // ─── Case 2: Text Messages ───
-    const text = payload?.message?.text?.trim();
+    // ─── Case 2: Text or Voice Messages ───
+    let text = payload?.message?.text?.trim() || '';
+
+    // Voice Note Detection: transcribe audio if present and no text
+    if (!text && payload?.message?.voice) {
+      const fileId = payload.message.voice.file_id;
+      console.log(`[Worker] Voice note detected. file_id: ${fileId}`);
+      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.LISTENING_VOICE);
+      text = await transcribeVoiceNote(fileId);
+      console.log(`[Worker] Transcribed voice text: "${text}"`);
+      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.VOICE_TRANSCRIBED(escapeHtml(text)));
+    }
+
     if (!text) return;
 
     // A. Check active session state first

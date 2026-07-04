@@ -46,6 +46,8 @@ export const BOT_MESSAGES = {
     ROLLING_OVER_TASK: '⏳ Đang tạo rollover task sang ngày mai...',
     SAVING_BOOKMARK: '⏳ Đang phân tích và lưu Bookmark...',
     INJECTING_SCHEDULE: '⏳ Đang đẩy lịch trình vào Notion Calendar...',
+    LISTENING_VOICE: '🎙️ Đang nghe voice note của Sếp...',
+    VOICE_TRANSCRIBED: (text: string) => `📝 Liam nghe được: <i>${text}</i>`,
   },
   BUTTONS: {
     OPEN_ROLLOVER: '📂 Mở Rollover Task',

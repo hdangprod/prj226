@@ -32,7 +32,7 @@ function mockRes() {
 }
 
 async function runTests() {
-  console.log('=== Starting Offline Integration Tests (Slice 1 & 2) ===\n');
+  console.log('=== Starting Offline Integration Tests (Slice 1, 2 & 3) ===\n');
 
   try {
     // ─── SLICE 1 TESTS ───
@@ -204,6 +204,62 @@ async function runTests() {
     } finally {
       Date.now = originalDateNow;
     }
+
+    // ─── SLICE 3 TESTS ───
+    console.log('--- Test 7: Voice Note Filler Word Stripping ---');
+    const { stripFillerWords } = require('../src/sensors/voiceProcessor');
+    const fillerInput = 'ờ uhm tôi cần làm giao diện đăng nhập cho PRJ226 à trước thứ 6';
+    const fillerOutput = stripFillerWords(fillerInput);
+    console.log(`[Test 7] Input:  "${fillerInput}"`);
+    console.log(`[Test 7] Output: "${fillerOutput}"`);
+
+    // The cleaned text should NOT contain filler words
+    if (fillerOutput.includes(' ờ ') || fillerOutput.includes(' uhm ') || fillerOutput.startsWith('ờ ')) {
+      throw new Error(`Test 7 Failed: Filler words still present in output: "${fillerOutput}"`);
+    }
+    // The cleaned text SHOULD still contain the essential content
+    if (!fillerOutput.includes('PRJ226') || !fillerOutput.includes('giao diện đăng nhập')) {
+      throw new Error(`Test 7 Failed: Essential content was stripped: "${fillerOutput}"`);
+    }
+    console.log('✅ Test 7 passed successfully!\n');
+
+
+    console.log('--- Test 8: Voice Note End-to-End Task Capture ---');
+    clearSentMessages();
+    const reqVoice: any = {
+      path: '/webhook',
+      body: {
+        message: {
+          chat: { id: 999999 },
+          message_id: 1008,
+          voice: {
+            file_id: 'voice-file-abc123',
+            duration: 5,
+            mime_type: 'audio/ogg',
+          },
+        },
+      },
+    };
+    const resVoice = mockRes();
+    await helloHttp(reqVoice, resVoice);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    // Expect: (1) "Đang nghe voice note..." (2) "Liam nghe được: <transcription>" (3) "Đang phân tích task..." (4) "Task created..."
+    if (sentMessages.length < 3) {
+      throw new Error(`Test 8 Failed: Expected at least 3 messages (voice ack + transcription + task flow), got ${sentMessages.length}`);
+    }
+    if (!sentMessages[0].text.includes('voice note')) {
+      throw new Error(`Test 8 Failed: First message should acknowledge voice note, got: "${sentMessages[0].text}"`);
+    }
+    if (!sentMessages[1].text.includes('Liam nghe')) {
+      throw new Error(`Test 8 Failed: Second message should show transcription, got: "${sentMessages[1].text}"`);
+    }
+    // The voice mock returns text containing PRJ226, which triggers autonomous task capture
+    const lastMsg = sentMessages[sentMessages.length - 1];
+    if (!lastMsg.text.includes('Task created')) {
+      throw new Error(`Test 8 Failed: Final message should confirm task creation, got: "${lastMsg.text}"`);
+    }
+    console.log('✅ Test 8 passed successfully!\n');
 
   } catch (error) {
     console.error('❌ Test execution failed:', error);
