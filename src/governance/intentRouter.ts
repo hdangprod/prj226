@@ -1,6 +1,7 @@
 import { sendMessage, editMessageText, answerCallbackQuery, escapeHtml } from '../tools/telegramClient';
 import { classifyIntent } from '../gemini/client';
 import { executeTaskCapture } from '../skills/taskCaptureSkill';
+import { executeWeeklyPlanning, commitWeeklyDraft } from '../skills/weeklyPlanningSkill';
 import { transcribeVoiceNote } from '../sensors/voiceProcessor';
 import { requestHitlConfirmation } from './hitlManager';
 import {
@@ -94,8 +95,14 @@ async function executeConfirmedIntent(
     // Stub: Will be implemented in future slices
     await sendMessage(chatId, '📌 Tính năng Highlight sẽ được triển khai sớm!');
   } else if (intent === 'Weekly Planning') {
-    // Stub: Will be implemented in Slice 5
-    await sendMessage(chatId, '📅 Tính năng Weekly Planning sẽ được triển khai sớm!');
+    await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_WEEKLY_PLAN);
+    try {
+      await executeWeeklyPlanning(chatId, text, getCurrentIsoTime());
+    } catch (error) {
+      console.error('[Worker] Weekly Planning Error:', error);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      await sendMessage(chatId, BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errMsg)));
+    }
   } else {
     await sendMessage(chatId, BOT_MESSAGES.ERRORS.UNKNOWN_COMMAND);
   }
@@ -212,6 +219,28 @@ export async function handleWorkerPayload(payload: any): Promise<void> {
         await deleteSession(chatId);
         await editMessageText(chatId, message.message_id, BOT_MESSAGES.BUTTONS.CANCELLED);
         console.log(`[Worker] HITL session cancelled by user.`);
+      } else if (action === 'weekly_approve') {
+        const draftId = actionPayload;
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.PROCESSING);
+        
+        try {
+          const count = await commitWeeklyDraft(chatId, draftId);
+          await editMessageText(chatId, message.message_id, `✅ <b>Đã đồng bộ thành công ${count} tasks vào Notion!</b>`);
+        } catch (error) {
+          console.error('[Worker] Error committing weekly draft:', error);
+          const errMsg = error instanceof Error ? error.message : String(error);
+          await sendMessage(chatId, BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errMsg)));
+        }
+      } else if (action === 'weekly_cancel') {
+        const draftId = actionPayload;
+        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.CANCELLED);
+        try {
+          const { deleteDraft } = await import('../tools/firestoreClient');
+          await deleteDraft(draftId);
+        } catch (e) {
+          console.error('[Worker] Failed to delete draft on cancel:', e);
+        }
+        await editMessageText(chatId, message.message_id, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
       }
       return;
     }

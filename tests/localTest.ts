@@ -32,7 +32,7 @@ function mockRes() {
 }
 
 async function runTests() {
-  console.log('=== Starting Offline Integration Tests (Slice 1-4) ===\n');
+  console.log('=== Starting Offline Integration Tests (Slice 1-5) ===\n');
 
   try {
     // ─── SLICE 1 TESTS ───
@@ -387,6 +387,120 @@ async function runTests() {
       throw new Error(`Test 11 Failed: Session should be deleted after cancel, got: ${JSON.stringify(cancelledSession)}`);
     }
     console.log('✅ Test 11 passed successfully!\n');
+
+    // ─── SLICE 5 TESTS ───
+    console.log('--- Test 12: Weekly Planning Triggers Draft ---');
+    clearSentMessages();
+    const reqWeekly: any = {
+      path: '/webhook',
+      body: {
+        message: {
+          chat: { id: 111222 },
+          text: 'lên kế hoạch tuần này nhé',
+          message_id: 1012,
+        },
+      },
+    };
+    const resWeekly = mockRes();
+    await helloHttp(reqWeekly, resWeekly);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    if (sentMessages.length < 2) {
+      throw new Error(`Test 12 Failed: Expected analyzing message + preview message, got ${sentMessages.length}`);
+    }
+    if (!sentMessages[0].text.includes('tối ưu hóa')) {
+      throw new Error(`Test 12 Failed: First message should be analyzing prompt, got: "${sentMessages[0].text}"`);
+    }
+    if (!sentMessages[1].text.includes('Bản nháp lịch trình tuần')) {
+      throw new Error(`Test 12 Failed: Second message should be draft preview, got: "${sentMessages[1].text}"`);
+    }
+
+    const weeklyKeyboard = sentMessages[1].replyMarkup?.inline_keyboard;
+    if (!weeklyKeyboard || weeklyKeyboard.length < 2) {
+      throw new Error(`Test 12 Failed: Expected 2 buttons (Approve, Cancel), got ${weeklyKeyboard?.length}`);
+    }
+    
+    // Extract draftId from the callback data
+    const approveCallbackData = weeklyKeyboard[0][0].callback_data;
+    const draftId = approveCallbackData.split(':')[1];
+    if (!draftId) {
+      throw new Error(`Test 12 Failed: Could not extract draftId from callback_data: ${approveCallbackData}`);
+    }
+    
+    const { loadDraft } = require('../src/tools/firestoreClient');
+    const draft = await loadDraft(draftId);
+    if (!draft || draft.length === 0) {
+      throw new Error(`Test 12 Failed: Draft not saved to Firestore`);
+    }
+    console.log('✅ Test 12 passed successfully!\n');
+
+
+    console.log('--- Test 13: Weekly Planning Cancel Callback ---');
+    clearSentMessages();
+    const reqWeeklyCancel: any = {
+      path: '/webhook',
+      body: {
+        callback_query: {
+          id: 'cb-weekly-cancel',
+          message: {
+            chat: { id: 111222 },
+            message_id: 1013,
+          },
+          data: `weekly_cancel:${draftId}`,
+        },
+      },
+    };
+    const resWeeklyCancel = mockRes();
+    await helloHttp(reqWeeklyCancel, resWeeklyCancel);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    if (sentMessages.length !== 1) {
+      throw new Error(`Test 13 Failed: Expected 1 message (cancelled), got ${sentMessages.length}`);
+    }
+    
+    const draftAfterCancel = await loadDraft(draftId);
+    if (draftAfterCancel !== null) {
+      throw new Error(`Test 13 Failed: Draft should be deleted after cancel`);
+    }
+    console.log('✅ Test 13 passed successfully!\n');
+
+
+    console.log('--- Test 14: Weekly Planning Approve Callback ---');
+    // First, recreate a draft for testing approval
+    const testDraftId = 'test-draft-999';
+    const { saveDraft } = require('../src/tools/firestoreClient');
+    await saveDraft(testDraftId, draft); // re-use the draft from test 12
+    
+    clearSentMessages();
+    const reqWeeklyApprove: any = {
+      path: '/webhook',
+      body: {
+        callback_query: {
+          id: 'cb-weekly-approve',
+          message: {
+            chat: { id: 111222 },
+            message_id: 1014,
+          },
+          data: `weekly_approve:${testDraftId}`,
+        },
+      },
+    };
+    const resWeeklyApprove = mockRes();
+    await helloHttp(reqWeeklyApprove, resWeeklyApprove);
+
+    console.log('Messages sent:', JSON.stringify(sentMessages, null, 2));
+    if (sentMessages.length !== 1) {
+      throw new Error(`Test 14 Failed: Expected 1 message (success), got ${sentMessages.length}`);
+    }
+    if (!sentMessages[0].text.includes('Đã đồng bộ thành công')) {
+      throw new Error(`Test 14 Failed: Message should confirm sync, got: "${sentMessages[0].text}"`);
+    }
+    
+    const draftAfterApprove = await loadDraft(testDraftId);
+    if (draftAfterApprove !== null) {
+      throw new Error(`Test 14 Failed: Draft should be deleted after approval`);
+    }
+    console.log('✅ Test 14 passed successfully!\n');
 
   } catch (error) {
     console.error('❌ Test execution failed:', error);

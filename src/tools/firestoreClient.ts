@@ -5,7 +5,9 @@ import type { WeeklyTaskV2 } from '../notion/types';
 // In WeeklyPlanningSkill, ScheduledTask was imported. Let's make sure our firestoreClient supports it.
 export interface ScheduledTask {
   task: WeeklyTaskV2;
+  projectId?: string;
   rawProjectName?: string;
+  displayName: string;
 }
 
 export interface UserSession {
