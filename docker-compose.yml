@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  orchestrator-runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: prj226_agent_sandbox
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - NODE_ENV=test
+      - QUEUE_MODE=sync
+      - NOTION_API_KEY=secret_mock_notion_key_production_fallback
+      - TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
+      - FIRESTORE_EMULATOR_HOST=firestore-emulator:8080
+      - GOOGLE_APPLICATION_CREDENTIALS=/usr/src/app/secrets/google_creds.json
+      - GEMINI_API_KEY=AIzaSyFakeKey_Generated_For_System_Routing
+      - GEMINI_MODEL_LITE=gemini-3.1-flash-lite
+      - GEMINI_MODEL_PRO=gemini-3.1-flash
+    depends_on:
+      - firestore-emulator
+
+  firestore-emulator:
+    image: google/cloud-sdk:slim
+    container_name: prj226_firestore_emulator
+    command: gcloud beta emulators firestore start --host-port=0.0.0.0:8080
+    ports:
+      - "8080:8080"
