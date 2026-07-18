@@ -1,6 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
-import type { TaskInput } from '../notion/types';
-import type { WeeklyTaskV2 } from '../notion/types';
+import type { TaskInput } from '../types/notion';
+import type { WeeklyTaskV2 } from '../types/notion';
 
 // In WeeklyPlanningSkill, ScheduledTask was imported. Let's make sure our firestoreClient supports it.
 export interface ScheduledTask {

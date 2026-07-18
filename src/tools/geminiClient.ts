@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import type { Schema } from '@google/generative-ai';
 import { config, MODELS } from '../config';
-import type { GeminiTaskOutput, WeeklyTaskV2 } from '../notion/types';
+import type { GeminiTaskOutput, WeeklyTaskV2 } from '../types/notion';
 
 const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
 

@@ -1,10 +1,10 @@
-import { planWeeklySchedule } from '../gemini/client';
+import { planWeeklySchedule } from '../tools/geminiClient';
 import { fetchUpcomingEvents, type BusySlot } from '../tools/googleClient';
 import { fetchActiveTasksWithDates, findProjectByName, createTaskV2, getOrCreateDailyLog } from '../tools/notionClient';
 import { saveDraft, loadDraft, deleteDraft, type ScheduledTask } from '../tools/firestoreClient';
 import { sendMessage, escapeHtml } from '../tools/telegramClient';
 import { BOT_MESSAGES } from '../constants/messages';
-import type { WeeklyTaskV2, NotionBusySlot } from '../notion/types';
+import type { WeeklyTaskV2, NotionBusySlot } from '../types/notion';
 
 // ─── Helpers ───
 
