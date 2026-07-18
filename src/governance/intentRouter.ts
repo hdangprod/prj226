@@ -1,5 +1,5 @@
 import { sendMessage, editMessageText, answerCallbackQuery, escapeHtml } from '../tools/telegramClient';
-import { classifyIntent } from '../gemini/client';
+import { classifyIntent } from '../tools/geminiClient';
 import { executeTaskCapture } from '../skills/taskCaptureSkill';
 import { executeWeeklyPlanning, commitWeeklyDraft } from '../skills/weeklyPlanningSkill';
 import { transcribeVoiceNote } from '../sensors/voiceProcessor';

@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client';
 import { config } from '../config';
-import type { TaskInput, TaskPage, ChecklistBlock, DailyLogPage, NotionBusySlot, WeeklyTaskV2 } from '../notion/types';
+import type { TaskInput, TaskPage, ChecklistBlock, DailyLogPage, NotionBusySlot, WeeklyTaskV2 } from '../types/notion';
 
 export const notion = process.env.NODE_ENV === 'test' ? null as any : new Client({ auth: config.NOTION_API_KEY });
 

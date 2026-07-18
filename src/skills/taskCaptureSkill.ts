@@ -1,6 +1,6 @@
-import { parseTaskInput } from '../gemini/client';
+import { parseTaskInput } from '../tools/geminiClient';
 import { findProjectByName, createTask, getOrCreateDailyLog } from '../tools/notionClient';
-import type { TaskInput } from '../notion/types';
+import type { TaskInput } from '../types/notion';
 
 export interface TaskCaptureResult {
   status: 'success' | 'needs_project_selection';
