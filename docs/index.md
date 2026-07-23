@@ -1,6 +1,6 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 2.5.0
+version: 2.6.0
 date: 2026-07-23
 type: index
 ---
@@ -52,4 +52,3 @@ Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index
 
 ## Human Reviewer Hub (`docs/artifacts/`)
 - **[Project Evolution & Engineering Journey](./artifacts/PROJECT_JOURNEY.md)** - Living project log, milestones, architectural decisions, and release notes for project reviewers.
-- **[Changelog & Refactoring Notes](./artifacts/changelog.md)** - Major version release notes and architectural refactoring logs.
