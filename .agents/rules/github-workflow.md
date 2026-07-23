@@ -5,13 +5,20 @@
 ### A. Standard Flow (Features, Major Refactors, Complex Fixes)
 1. **Create Issue**: Use `gh issue create` with Title & 5-W Description.
 2. **Checkout Branch**: Dedicated branch from `main` named `issue-[ID]-[short-description]` (e.g. `issue-28/optimize-notion`). Do NOT code directly on `main`.
-3. **Plan First**: Create plan file at `docs/plans/issue-[ID]-[short-description].md`. Wait for explicit user "Proceed" before coding.
-4. **Code & Cascade Docs**: Implement approved changes and run the 3-Step Documentation Cascade to sync specs and sitemaps.
-5. **Report & PR**: Run `npm run build` and `npm test`, post Implementation Report, push branch, and create PR to `main` using:
+3. **Plan & Archive Directory Setup**:
+   - Create plan directory at `docs/plans/issue-[ID]/`.
+   - Save initial plan at `docs/plans/issue-[ID]/plan.md`. Wait for explicit user approval before coding.
+4. **Code & Cascade Docs**: Implement approved changes and run the 3-Step Documentation Cascade to sync specs and sitemaps (`docs/sitemap.md`).
+5. **Report & PR**: Run `npm run build` and `npm test`, push branch, and create PR to `main` using:
    ```bash
    gh pr create --base main --head <branch-name> --title "<PR Title>" --body "<Report>"
    ```
    *Note*: **Do NOT self-merge.** Only the repository owner approves and merges PRs.
+6. **Post-Merge Completion & Plan Archiving (AUTOMATED)**:
+   - When the user merges the PR, automatically save `solution_report.md` into `docs/plans/issue-[ID]/solution_report.md`.
+   - Sync `docs/sitemap.md` to index `docs/plans/issue-[ID]/`.
+   - Post the 5-W Implementation & Completion Report as a comment on the GitHub Issue and close the issue (`gh issue close <ID>`).
+   - Switch back to `main`, pull latest changes (`git pull origin main`), and delete the local feature branch (`git branch -d <branch-name>`).
 
 ### B. Fast-Track Flow (Typos, Config Adjustments, Urgent 1-2 Line Hotfixes)
 - No Issue, Plan, or PR required.
