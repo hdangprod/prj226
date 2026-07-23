@@ -96,3 +96,22 @@ The system integrates with 5 Notion databases, mapping relationships as follows:
   - `run-evals.ts`: A test runner executing intent routing queries using the live Gemini LITE API, comparing outputs to the ground-truth dataset, and enforcing a strict $\ge 95\%$ accuracy threshold.
   - **Token Optimization for Evals Suite**: The evaluation suite run-evals.ts is strictly decoupled from the standard `npm test` workflow. It is wired to a dedicated command (`npm run evals`) or established as a Git pre-push hook. It must only run on demand or right before raising a Pull Request.
 - **Rate-Limiting Guardrails**: Notion API requests must incorporate throttle delays (350ms) to avoid HTTP 429 errors during bulk creation operations.
+
+---
+
+## 4. Dynamic Rule Loading Engine
+
+Agent context rules are managed via a vendor-agnostic Dynamic Rule Loading Engine rather than static platform-specific injection.
+
+### Architecture
+- **Rules** (`.agents/rules/`): Pure Markdown files containing domain-specific constraints (API limits, coding standards, Git SOPs).
+- **Manifest** (`.agents/rules-manifest.json`): Single Source of Truth mapping rule IDs to `match_keywords`, `match_paths` (glob patterns), and an `always_on` boolean for global rules.
+- **Rule Engine** (`.agents/scripts/rule-engine.js`): CLI tool that evaluates `--path` and `--keyword` inputs against the manifest and outputs matching rule Markdown to stdout.
+- **Rule Creator** (`.agents/scripts/add-rule.js`): Enforces creation SOP — auto-generates rule file + manifest entry. `--verify` flag audits manifest/filesystem sync.
+
+### Rule Classification
+| Type | `always_on` | Behavior |
+|------|-------------|----------|
+| **Global Governance** | `true` | Always emitted (e.g., `github-workflow`) |
+| **Domain-Specific** | `false` | Emitted only on path/keyword match (e.g., `notion-limits`, `centralized-messages`) |
+

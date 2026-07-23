@@ -18,7 +18,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 4-Layer system & DB schemas. |
 | **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, 3-step GCP Cloud Run pre-deploy checklist. |
 | **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, self-healing runner, task capture & weekly planning skills. |
-| **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules/notion-limits.md`<br>`@.agents/rules/centralized-messages.md` | `On-Demand` | Notion API limits, message constants, deterministic Notion, Firestore, Google & Telegram clients. |
+| **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules-manifest.json`<br>`@.agents/scripts/rule-engine.js` | `On-Demand` | Dynamic rule engine, deterministic Notion, Firestore, Google & Telegram clients. |
+| **Dynamic Rules Guide** | `@docs/DYNAMIC_RULES_GUIDE.md` | `On-Demand` | Rule engine SOP, platform migration manual, manifest schema. |
 | **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`) and detailed solution report (`solution_report.md`). |
 | **Artifact Hub (History)** | `@docs/artifacts/PROJECT_JOURNEY.md` | `Human Request Only` | Living project timeline and key architecture milestone log. |
 
@@ -31,9 +32,15 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 ├── AGENTS.md                          # [AIOS Layer 1] System identity & core directives
 ├── .agents/
 │   ├── rules/
-│   │   ├── github-workflow.md         # [AIOS Layer 1/3 - Always On] Git, branching, commit & PR rules
+│   │   ├── github-workflow.md         # [AIOS Layer 1 - Always On] Git, branching, commit & PR rules
 │   │   ├── notion-limits.md           # [AIOS Layer 5 - On-Demand] Notion API rate limits & throttling
 │   │   └── centralized-messages.md    # [AIOS Layer 5 - On-Demand] UI/Bot text message constants
+│   ├── rules-manifest.json            # [SSOT] Dynamic rule mapping manifest
+│   ├── scripts/
+│   │   ├── rule-engine.js             # [Core Engine] CLI rule resolver (--path, --keyword)
+│   │   └── add-rule.js                # [SOP Enforcer] Automated rule creator & manifest auditor
+│   ├── adapters/
+│   │   └── README.md                  # Platform migration instructions
 │   ├── workflows/
 │   │   ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
 │   │   └── deploy-check.md            # [AIOS Layer 3 - On-Demand] GCP Cloud Run deployment verification checklist
@@ -44,6 +51,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── index.md                       # [AIOS Layer 2] Master knowledge base index
 │   ├── spec.md                        # [AIOS Layer 2] Complete technical specification (v2.0.0)
 │   ├── notion_database_setup.md       # [AIOS Layer 2] Notion DB 5-Tier setup instructions
+│   ├── DYNAMIC_RULES_GUIDE.md         # [On-Demand] Rule engine SOP & platform migration manual
 │   ├── agents/
 │   │   └── context.md                 # [AIOS Layer 2] 4-Layer architecture & DB schema reference
 │   ├── plans/                         # [Issue Plans & Solutions Archive]

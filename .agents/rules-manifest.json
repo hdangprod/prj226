@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "github-workflow",
+      "description": "Git branching, commit format, and PR SOP",
+      "file": ".agents/rules/github-workflow.md",
+      "always_on": true,
+      "match_keywords": [
+        "git",
+        "commit",
+        "branch",
+        "pr",
+        "merge"
+      ],
+      "match_paths": []
+    },
+    {
+      "id": "notion-limits",
+      "description": "Notion API rate limiting and throttling rules",
+      "file": ".agents/rules/notion-limits.md",
+      "always_on": false,
+      "match_keywords": [
+        "notion",
+        "rate_limit"
+      ],
+      "match_paths": [
+        "src/tools/notion*",
+        "src/tools/notion*/**"
+      ]
+    },
+    {
+      "id": "centralized-messages",
+      "description": "UI/Bot text message constants policy",
+      "file": ".agents/rules/centralized-messages.md",
+      "always_on": false,
+      "match_keywords": [
+        "messages",
+        "bot_reply"
+      ],
+      "match_paths": [
+        "src/constants/**"
+      ]
+    },
+    {
+      "id": "redis-state",
+      "description": "Redis state management and lock coordination rules",
+      "file": ".agents/rules/redis-state-rules.md",
+      "always_on": false,
+      "match_keywords": [
+        "redis",
+        "soft_lock",
+        "hard_lock"
+      ],
+      "match_paths": [
+        "src/tools/redis/**",
+        "src/governance/**"
+      ]
+    },
+    {
+      "id": "telegram-limits",
+      "description": "Telegram API formatting and message limits",
+      "file": ".agents/rules/telegram-limits-rules.md",
+      "always_on": false,
+      "match_keywords": [
+        "telegram",
+        "bubble",
+        "strikethrough"
+      ],
+      "match_paths": [
+        "src/sensors/**",
+        "src/tools/telegram**"
+      ]
+    }
+  ]
+}

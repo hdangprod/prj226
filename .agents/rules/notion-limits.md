@@ -1,7 +1,3 @@
----
-trigger: model_decision
----
-
 # Notion API Rate Limiting Rules
 
 ## Rate Limits (HTTP 429 Protection)
