@@ -1,6 +1,6 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 2.1.0
+version: 2.2.0
 date: 2026-07-23
 type: index
 ---
@@ -39,10 +39,16 @@ Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index
 ---
 
 ## Issue Plans & Solutions Archive (`docs/plans/`)
-- **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)**:
-  - [Plan](./plans/issue-37/plan.md)
-  - [Walkthrough](./plans/issue-37/walkthrough.md)
-  - [Solution & Setup Report](./plans/issue-37/solution_report.md)
+- **[Issue #16: Rollover & Defer Task Logic](./plans/issue-16/solution_report.md)** ([Plan](./plans/issue-16/plan.md))
+- **[Issue #18: Support Time in Task Dates](./plans/issue-18/solution_report.md)** ([Plan](./plans/issue-18/plan.md))
+- **[Issue #21: View Task UI Refactoring](./plans/issue-21/solution_report.md)** ([Plan](./plans/issue-21/plan.md))
+- **[Issue #23: Conversational Weekly Scheduler V2](./plans/issue-23/solution_report.md)** ([Plan](./plans/issue-23/plan.md))
+- **[Issue #25: Weekly Scheduler Output Enhancements](./plans/issue-25/solution_report.md)** ([Plan](./plans/issue-25/plan.md))
+- **[Issue #27: Fix Scheduler Overlap Logic](./plans/issue-27/solution_report.md)** ([Plan](./plans/issue-27/plan.md))
+- **[Issue #29: Hybrid Model Routing (LITE vs PRO)](./plans/issue-29/solution_report.md)** ([Plan](./plans/issue-29/plan.md))
+- **[Issue #31: Fix Temporal Slot Overlaps](./plans/issue-31/solution_report.md)** ([Plan](./plans/issue-31/plan.md))
+- **[Issue #33: Rebuild into 4-Layer Closed-Loop System](./plans/issue-33/solution_report.md)** ([Plan](./plans/issue-33/plan.md))
+- **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)** ([Plan](./plans/issue-37/plan.md) | [Walkthrough](./plans/issue-37/walkthrough.md))
 
 ---
 

@@ -19,7 +19,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, 3-step GCP Cloud Run pre-deploy checklist. |
 | **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, self-healing runner, task capture & weekly planning skills. |
 | **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules/notion-limits.md`<br>`@.agents/rules/centralized-messages.md` | `On-Demand` | Notion API limits, message constants, deterministic Notion, Firestore, Google & Telegram clients. |
-| **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`), execution walkthrough (`walkthrough.md`), and detailed 5-W solution report (`solution_report.md`). |
+| **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`) and detailed solution report (`solution_report.md`). |
 | **Artifact Hub (History)** | `@docs/artifacts/PROJECT_JOURNEY.md` | `Human Request Only` | Living project timeline, milestone retrospectives, release changelogs. |
 
 ---
@@ -36,7 +36,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   └── centralized-messages.md    # [AIOS Layer 5 - On-Demand] UI/Bot text message constants
 │   ├── workflows/
 │   │   ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
-│   │   └── deploy-check.md            # [AIOS Layer 3 - On-Demand] GCP Cloud Run pre-deploy checklist
+│   │   └── deploy-check.md            # [AIOS Layer 3 - On-Demand] GCP Cloud Run deployment verification checklist
 │   └── skills/
 │       └── orchestrator/              # [AIOS Layer 4 - On-Demand] Multi-agent execution loop
 ├── docs/
@@ -50,10 +50,16 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── agents/
 │   │   └── context.md                 # [AIOS Layer 2] 4-Layer architecture & DB schema reference
 │   ├── plans/                         # [Issue Plans & Solutions Archive]
-│   │   └── issue-37/                  # Issue #37 documentation folder
-│   │       ├── plan.md                # Implementation Plan
-│   │       ├── walkthrough.md         # Execution walkthrough
-│   │       └── solution_report.md     # Detailed 5-W Problem, Solution & Setup Guide
+│   │   ├── issue-16/                  # Rollover / Defer Task Logic
+│   │   ├── issue-18/                  # Support Time in Task Dates
+│   │   ├── issue-21/                  # View Task Telegram UI Refactoring
+│   │   ├── issue-23/                  # Conversational Weekly Scheduler V2
+│   │   ├── issue-25/                  # Weekly Scheduler Output Enhancements
+│   │   ├── issue-27/                  # Fix Scheduler Overlap Logic
+│   │   ├── issue-29/                  # Hybrid Model Routing (LITE vs PRO)
+│   │   ├── issue-31/                  # Fix Temporal Slot Overlaps
+│   │   ├── issue-33/                  # Rebuild into 4-Layer Closed-Loop System
+│   │   └── issue-37/                  # AIOS 5-Layer Alignment & Token Optimization
 │   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
 │       ├── PROJECT_JOURNEY.md         # Living project timeline & engineering log
 │       ├── changelog.md               # Major version release notes & refactoring log
