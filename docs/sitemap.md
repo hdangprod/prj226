@@ -64,7 +64,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   ├── issue-29/                  # Hybrid Model Routing (LITE vs PRO) (plan.md, solution_report.md)
 │   │   ├── issue-31/                  # Fix Temporal Slot Overlaps (plan.md, solution_report.md)
 │   │   ├── issue-33/                  # Rebuild into 4-Layer Closed-Loop System (plan.md, solution_report.md)
-│   │   └── issue-37/                  # AIOS 5-Layer Alignment (plan.md, solution_report.md)
+│   │   ├── issue-37/                  # AIOS 5-Layer Alignment (plan.md, solution_report.md)
+│   │   └── issue-40/                  # Dynamic Rule Loading Engine (plan.md, solution_report.md)
 │   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
 │       └── PROJECT_JOURNEY.md         # Living project timeline & engineering log
 └── src/                               # TypeScript application source code
