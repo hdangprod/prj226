@@ -1,7 +1,3 @@
----
-trigger: always_on
----
-
 # GitHub & Git Workflow Specification
 
 ## 1. Workflow Routing

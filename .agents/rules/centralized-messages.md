@@ -1,7 +1,3 @@
----
-trigger: model_decision
----
-
 # Centralized Messages Rule
 
 ## Rule Statement

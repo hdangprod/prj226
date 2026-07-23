@@ -34,17 +34,24 @@ A task or hotfix is considered **Done** ONLY when:
 2. `npm run build` compiles with 0 errors.
 3. The 3-Step Documentation Cascade has updated all associated docs, specs, and `docs/sitemap.md`.
 
+### 5. Dynamic Rule Loading SOP
+> [!IMPORTANT]
+> **BEFORE** inspecting, creating, or modifying any code in `src/`, you MUST execute:
+> `node .agents/scripts/rule-engine.js --path <target_file_path>`
+> Strictly adhere to all domain rules returned in stdout. Rules are managed via `.agents/rules-manifest.json` (SSOT) and loaded dynamically by the rule engine.
+
 ---
 
 ## AIOS 5-Layer Structure Index
 
 | AIOS Layer | Scope / Responsibilities | Target Directory / Files |
 | :--- | :--- | :--- |
-| **Layer 1: Identity & Rules** | Global identity, non-negotiable rules & Git SOPs | [`AGENTS.md`](file:///Users/dangnguyen/Desktop/PRJ226/AGENTS.md), [`@.agents/rules/github-workflow.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/rules/github-workflow.md) |
+| **Layer 1: Identity & Rules** | Global identity, non-negotiable rules, Git SOPs & Dynamic Rule Engine | [`AGENTS.md`](file:///Users/dangnguyen/Desktop/PRJ226/AGENTS.md), [`@.agents/rules-manifest.json`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/rules-manifest.json) |
 | **Layer 2: Memory & Context** | System specs, schemas, and lazy-loading sitemap | [`@docs/sitemap.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/sitemap.md), [`@docs/spec.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/spec.md), [`@docs/agents/context.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/agents/context.md) |
 | **Layer 3: Workflows & SOPs** | Bug triage & Cloud Run deployment checklists | [`@.agents/workflows/bug-hunting.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/bug-hunting.md), [`@.agents/workflows/deploy-check.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/deploy-check.md) |
 | **Layer 4: Modular Skills** | Multi-agent execution, task capture, weekly plan | [`@.agents/skills/orchestrator/SKILL.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/skills/orchestrator/SKILL.md), [`src/skills/`](file:///Users/dangnguyen/Desktop/PRJ226/src/skills/) |
-| **Layer 5: Tools & Integrations**| Deterministic API clients (Notion, Firestore, GCal) | [`src/tools/`](file:///Users/dangnguyen/Desktop/PRJ226/src/tools/), [`@.agents/rules/notion-limits.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/rules/notion-limits.md) |
+| **Layer 5: Tools & Integrations**| Dynamic rule engine, deterministic API clients | [`src/tools/`](file:///Users/dangnguyen/Desktop/PRJ226/src/tools/), [`@.agents/scripts/rule-engine.js`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/scripts/rule-engine.js) |
 
 ---
 - Master Sitemap: `@docs/sitemap.md`
+- Rules Manifest: `@.agents/rules-manifest.json`

@@ -88,6 +88,16 @@ Stateful multi-tool workflow orchestration.
 
 ---
 
+## Dynamic Rule Loading Engine
+
+The project uses a vendor-agnostic Dynamic Rule Loading Engine to manage agent context rules:
+- **Manifest** (`.agents/rules-manifest.json`): SSOT mapping rule IDs to keywords, path globs, and Markdown files. Supports `always_on` boolean for global governance rules.
+- **Rule Engine** (`.agents/scripts/rule-engine.js`): CLI tool accepting `--path` and `--keyword` flags, evaluates manifest, outputs matching rule Markdown content.
+- **Rule Creator** (`.agents/scripts/add-rule.js`): CLI tool enforcing rule creation SOP — auto-generates rule file and updates manifest atomically. Supports `--verify` for integrity auditing.
+- **Adapter Pattern**: Platform-specific integration configured per-adapter (Antigravity via `AGENTS.md` directive, Claude Code via `CLAUDE.md`, OpenCode via custom tool, Cursor via `.mdc` sync).
+
+---
+
 ## Project Structure
 ```text
 .agents/
@@ -95,6 +105,12 @@ Stateful multi-tool workflow orchestration.
 │   ├── github-workflow.md         → [Always On] Git, branching, commit & PR rules
 │   ├── notion-limits.md           → [On-Demand] Notion API rate limiting & throttling
 │   └── centralized-messages.md    → [On-Demand] UI/Bot message constants
+├── rules-manifest.json            → [SSOT] Dynamic rule mapping manifest
+├── scripts/
+│   ├── rule-engine.js             → [Core Engine] CLI rule resolver
+│   └── add-rule.js                → [SOP Enforcer] Automated rule creator
+├── adapters/
+│   └── README.md                  → Platform migration instructions
 ├── workflows/
 │   ├── bug-hunting.md             → [On-Demand] Bug triage & remediation
 │   └── deploy-check.md            → [On-Demand] GCP Cloud Run pre-deploy checklist

@@ -74,8 +74,8 @@ export async function fetchUpcomingEvents(
 
   const events = response.data.items ?? [];
   return events
-    .filter((e) => e.start?.dateTime && e.end?.dateTime)
-    .map((e) => ({
+    .filter((e: any) => e.start?.dateTime && e.end?.dateTime)
+    .map((e: any) => ({
       summary: e.summary ?? '(No title)',
       start: e.start!.dateTime!,
       end: e.end!.dateTime!,
