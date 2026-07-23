@@ -1,6 +1,6 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 2.2.0
+version: 2.3.0
 date: 2026-07-23
 type: index
 ---
@@ -48,11 +48,10 @@ Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index
 - **[Issue #29: Hybrid Model Routing (LITE vs PRO)](./plans/issue-29/solution_report.md)** ([Plan](./plans/issue-29/plan.md))
 - **[Issue #31: Fix Temporal Slot Overlaps](./plans/issue-31/solution_report.md)** ([Plan](./plans/issue-31/plan.md))
 - **[Issue #33: Rebuild into 4-Layer Closed-Loop System](./plans/issue-33/solution_report.md)** ([Plan](./plans/issue-33/plan.md))
-- **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)** ([Plan](./plans/issue-37/plan.md) | [Walkthrough](./plans/issue-37/walkthrough.md))
+- **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)** ([Plan](./plans/issue-37/plan.md))
 
 ---
 
 ## Human Reviewer Hub (`docs/artifacts/`)
-- **[Project Evolution & Engineering Journey](./artifacts/PROJECT_JOURNEY.md)** - Living project log, milestones, architectural decisions, and sprint retrospectives for project reviewers.
+- **[Project Evolution & Engineering Journey](./artifacts/PROJECT_JOURNEY.md)** - Living project log, milestones, architectural decisions, and release notes for project reviewers.
 - **[Changelog & Refactoring Notes](./artifacts/changelog.md)** - Major version release notes and architectural refactoring logs.
-- **[Sprint 01 Retrospective](./artifacts/retrospectives/sprint-01.md)** - Initial infrastructure setup and Telegram-to-Notion pipeline review.

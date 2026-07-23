@@ -9,7 +9,7 @@ ai_policy: "human_reviewer_only"
 # Project Evolution & Engineering Journey
 
 > [!CAUTION]
-> **AI AGENT TOKEN GUARD**: This file is intended exclusively for human reviewers and project documentation. AI agents MUST NOT auto-load or process this file during standard coding, refactoring, or bug-fixing sessions unless explicitly requested by the user.
+> **AI AGENT TOKEN GUARD**: This file is intended exclusively for human reviewers and project documentation. AI agents MUST NOT auto-load or process this file during standard coding tasks unless explicitly requested by the user.
 
 ---
 
@@ -19,16 +19,15 @@ The system is a serverless conversational assistant built with **TypeScript (v5.
 
 ---
 
-## 2. Chronological Milestones & Retrospectives
+## 2. Chronological Milestones
 
-### Milestone 1: Core Infrastructure & Pipeline Setup (Sprint 01)
+### Milestone 1: Core Infrastructure & Pipeline Setup
 - **Goal**: Establish serverless deployment pipeline on GCP Cloud Run, integrate Gemini NLP, and connect Telegram webhook to Notion SDK.
 - **Key Outcomes**:
   - Successfully deployed HTTP webhook server on GCP Cloud Run.
   - Connected Gemini LITE model for single-turn intent extraction and natural language task capture.
   - Implemented Callout blocks (💡 context descriptions) injected into Notion task body pages.
   - Integrated GCP Firestore Native Mode as an asynchronous session state buffer.
-- **Retrospective**: See [`docs/artifacts/retrospectives/sprint-01.md`](./retrospectives/sprint-01.md).
 
 ### Milestone 2: 4-Layer Closed-Loop Architecture & Agent Skills Refactoring
 - **Goal**: Decouple monolithic handlers into a modular AI-Native 4-Layer Architecture (`sensors`, `governance`, `tools`, `skills`).
@@ -39,12 +38,12 @@ The system is a serverless conversational assistant built with **TypeScript (v5.
   - Created `src/skills/` introducing stateful workflow skills (`taskCaptureSkill`, `weeklyPlanningSkill`).
   - Implemented rate-limiting throttles (`delay(350)`) and HTML message escaping.
 
-### Milestone 3: AI Rules Token Optimization & Unified Sitemap
+### Milestone 3: AIOS 5-Layer Framework & AI Sitemap Alignment
 - **Goal**: Streamline project rules, eliminate context bloat, standardize all rule/workflow files into English, and create a single AI Sitemap index.
 - **Key Outcomes**:
   - Consolidated Git branching and GitHub PR rules into a high-density, single file ([`github-workflow.md`](../../.agents/rules/github-workflow.md)).
   - Created [`docs/sitemap.md`](../sitemap.md) for explicit AI lazy-loading, preventing AI agents from preemptively reading entire file trees.
-  - Established `docs/artifacts/` hub to house permanent project history and milestone documentation.
+  - Restructured `docs/plans/` into per-issue plan and solution reports (`docs/plans/issue-[ID]/`).
 
 ---
 
@@ -64,9 +63,8 @@ The system is a serverless conversational assistant built with **TypeScript (v5.
 
 ---
 
-## 4. Key Artifacts Directory
+## 4. Key References Directory
 
-- **Sprint Retrospectives**: [`docs/artifacts/retrospectives/`](./retrospectives/)
 - **Master Sitemap**: [`docs/sitemap.md`](../sitemap.md)
 - **Master Knowledge Index**: [`docs/index.md`](../index.md)
 - **4-Layer System & DB Schema**: [`docs/agents/context.md`](../agents/context.md)
