@@ -20,7 +20,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, self-healing runner, task capture & weekly planning skills. |
 | **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules/notion-limits.md`<br>`@.agents/rules/centralized-messages.md` | `On-Demand` | Notion API limits, message constants, deterministic Notion, Firestore, Google & Telegram clients. |
 | **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`) and detailed solution report (`solution_report.md`). |
-| **Artifact Hub (History)** | `@docs/artifacts/PROJECT_JOURNEY.md` | `Human Request Only` | Living project timeline, milestone notes, release changelogs. |
+| **Artifact Hub (History)** | `@docs/artifacts/PROJECT_JOURNEY.md` | `Human Request Only` | Living project timeline and key architecture milestone log. |
 
 ---
 
@@ -58,7 +58,6 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   ├── issue-33/                  # Rebuild into 4-Layer Closed-Loop System (plan.md, solution_report.md)
 │   │   └── issue-37/                  # AIOS 5-Layer Alignment (plan.md, solution_report.md)
 │   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
-│       ├── PROJECT_JOURNEY.md         # Living project timeline & engineering log
-│       └── changelog.md               # Major version release notes & refactoring log
+│       └── PROJECT_JOURNEY.md         # Living project timeline & engineering log
 └── src/                               # TypeScript application source code
 ```
