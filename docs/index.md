@@ -1,6 +1,6 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 2.0.0
+version: 2.1.0
 date: 2026-07-23
 type: index
 ---
@@ -35,6 +35,14 @@ Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index
 ## AIOS Layer 5: Tools & System Integrations (`src/tools/`)
 - **[Notion API Limits](../.agents/rules/notion-limits.md)** - Rate limiting (3 rps) and throttle rules.
 - **[Centralized Messages](../.agents/rules/centralized-messages.md)** - UI/Bot text message centralization rules.
+
+---
+
+## Issue Plans & Solutions Archive (`docs/plans/`)
+- **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)**:
+  - [Plan](./plans/issue-37/plan.md)
+  - [Walkthrough](./plans/issue-37/walkthrough.md)
+  - [Solution & Setup Report](./plans/issue-37/solution_report.md)
 
 ---
 

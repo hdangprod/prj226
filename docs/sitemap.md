@@ -19,6 +19,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, 3-step GCP Cloud Run pre-deploy checklist. |
 | **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, self-healing runner, task capture & weekly planning skills. |
 | **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules/notion-limits.md`<br>`@.agents/rules/centralized-messages.md` | `On-Demand` | Notion API limits, message constants, deterministic Notion, Firestore, Google & Telegram clients. |
+| **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`), execution walkthrough (`walkthrough.md`), and detailed 5-W solution report (`solution_report.md`). |
 | **Artifact Hub (History)** | `@docs/artifacts/PROJECT_JOURNEY.md` | `Human Request Only` | Living project timeline, milestone retrospectives, release changelogs. |
 
 ---
@@ -48,13 +49,14 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── usage.en.md                    # [AIOS Layer 2] User operational manual (English)
 │   ├── agents/
 │   │   └── context.md                 # [AIOS Layer 2] 4-Layer architecture & DB schema reference
+│   ├── plans/                         # [Issue Plans & Solutions Archive]
+│   │   └── issue-37/                  # Issue #37 documentation folder
+│   │       ├── plan.md                # Implementation Plan
+│   │       ├── walkthrough.md         # Execution walkthrough
+│   │       └── solution_report.md     # Detailed 5-W Problem, Solution & Setup Guide
 │   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
 │       ├── PROJECT_JOURNEY.md         # Living project timeline & engineering log
 │       ├── changelog.md               # Major version release notes & refactoring log
 │       └── retrospectives/            # Milestone & sprint retrospectives
 └── src/                               # TypeScript application source code
-    ├── sensors/                       # [AIOS Layer 5/Sensor] Webhook, Dispatcher & Voice Processing
-    ├── governance/                    # [AIOS Layer 5/Governance] Intent Router & HITL Manager
-    ├── tools/                         # [AIOS Layer 5/Tools] Notion, Firestore, Google & Telegram Clients
-    └── skills/                        # [AIOS Layer 4/Skills] Task Capture & Weekly Planning Skills
 ```
