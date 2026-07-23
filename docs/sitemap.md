@@ -15,7 +15,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | AIOS Layer | Target Reference File | Token Policy | Scope / Intent |
 | :--- | :--- | :--- | :--- |
 | **Layer 1: Identity & Rules** | `@AGENTS.md`<br>`@.agents/rules/github-workflow.md` | `Always On` | System identity, positive MUST-FOLLOW rules, negative NEVER-DO restrictions, Git/PR SOP. |
-| **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md`<br>`@docs/troubleshooting.md`<br>`@docs/usage.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 4-Layer system & DB schemas, operational troubleshooting, user manuals. |
+| **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 4-Layer system & DB schemas. |
 | **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, 3-step GCP Cloud Run pre-deploy checklist. |
 | **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, self-healing runner, task capture & weekly planning skills. |
 | **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules/notion-limits.md`<br>`@.agents/rules/centralized-messages.md` | `On-Demand` | Notion API limits, message constants, deterministic Notion, Firestore, Google & Telegram clients. |
@@ -44,9 +44,6 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── index.md                       # [AIOS Layer 2] Master knowledge base index
 │   ├── spec.md                        # [AIOS Layer 2] Complete technical specification (v2.0.0)
 │   ├── notion_database_setup.md       # [AIOS Layer 2] Notion DB 5-Tier setup instructions
-│   ├── troubleshooting.md             # [AIOS Layer 2] Operational & troubleshooting guide
-│   ├── usage.md                       # [AIOS Layer 2] User operational manual (Vietnamese)
-│   ├── usage.en.md                    # [AIOS Layer 2] User operational manual (English)
 │   ├── agents/
 │   │   └── context.md                 # [AIOS Layer 2] 4-Layer architecture & DB schema reference
 │   ├── plans/                         # [Issue Plans & Solutions Archive]

@@ -1,6 +1,6 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 2.4.0
+version: 2.5.0
 date: 2026-07-23
 type: index
 ---
@@ -22,8 +22,6 @@ Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index
 - **[System Specification (spec.md)](./spec.md)** - Core architecture, tech stack, data flows, and multi-model routing.
 - **[4-Layer System & DB Schemas](./agents/context.md)** - Operational layers (Sensors, Governance, Tools, Skills) and 3-tier Notion database schema.
 - **[Notion Database Setup](./notion_database_setup.md)** - Setup guide for Notion databases (Tasks, Projects, Daily Logs, Areas, Resources).
-- **[Troubleshooting Guide](./troubleshooting.md)** - Operational diagnostics and GCP Cloud Run troubleshooting notes.
-- **[User Manual (Vietnamese)](./usage.md)** | **[User Manual (English)](./usage.en.md)**
 
 ## AIOS Layer 3: Workflows & SOPs (`.agents/workflows/`)
 - **[Bug Hunting Workflow](../.agents/workflows/bug-hunting.md)** - 4-step bug triage and remediation.
