@@ -2,13 +2,13 @@
 trigger: model_decision
 ---
 
-# Notion API Limits
+# Notion API Rate Limiting Rules
 
-## Quy định Rate Limit (HTTP 429)
-Notion API có giới hạn tối đa 3 requests per second (rps). Để tránh hệ thống bị sập hoặc trả về lỗi HTTP 429 khi người dùng tạo hàng loạt task (bulk creation), **bắt buộc** phải tuân thủ các quy tắc sau:
+## Rate Limits (HTTP 429 Protection)
+Notion API caps requests at 3 requests per second (rps). To prevent failures during bulk operations, strictly enforce:
 
-1. **Bắt buộc dùng Throttle Delay**:
-   Giữa các lần gọi Notion API tuần tự trong vòng lặp, luôn phải gọi hàm `delay(350)` (hoặc tương đương >333ms).
-   
-2. **Cấm chạy song song vô tội vạ**:
-   Nghiêm cấm việc sử dụng `Promise.all()` cho mảng các lời gọi tạo/ghi vào Notion API khi kích thước mảng có thể lớn hơn 3. Luôn ưu tiên vòng lặp `for...of` để kiểm soát tốc độ request.
+1. **Mandatory Throttle Delay**:
+   - Insert `delay(350)` (or >333ms) between consecutive API calls in loops.
+
+2. **No Unbounded Parallel Requests**:
+   - Do NOT use `Promise.all()` for array operations on Notion API when array length can exceed 3. Use `for...of` sequential loops with delays instead.

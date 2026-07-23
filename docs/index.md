@@ -1,32 +1,55 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 1.1.0
-date: 2026-06-20
+version: 2.5.0
+date: 2026-07-23
 type: index
 ---
 
-# Bản đồ Tri thức (Knowledge Index)
+# Knowledge Index & AIOS Master Map
 
-Chào mừng bạn đến với hệ thống tri thức của dự án **Telegram Bot Notion Second Brain Orchestrator**. Dự án được xây dựng theo tiêu chuẩn **AI-Native Workspace** (Google Antigravity Primitives) kết hợp định dạng **Open Knowledge Format (OKF v0.1)**.
+Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index structured by the **AIOS (Agentic Operating System) 5-Layer Framework**.
 
-Dưới đây là mục lục điều hướng đến các tài liệu quan trọng trong hệ thống:
+## Primary Navigation & Sitemap
+- **[AI & System Sitemap](./sitemap.md)** - Centralized sitemap and lazy-loading index for AI agents and developers.
 
-## 1. Đặc tả Hệ thống (Specifications)
-- [System Specification (spec.md)](./spec.md) - Tài liệu trung tâm quy định kiến trúc, công nghệ và tính năng của toàn bộ hệ thống (Bao gồm Data Flow, Models Routing).
+---
 
-## 2. Hướng dẫn Lắp ráp & Thiết lập (Setup & Database)
-- [Notion Database Setup](./notion_database_setup.md) - Hướng dẫn tạo và cấu hình 5 Database lõi (Tasks, Projects, Daily Logs, Areas, Resources) trên Notion.
-- [Walkthrough (Artifact)](../walkthrough.md) - Tóm tắt chi tiết các luồng hội thoại và tính năng đã hiện thực hóa.
+## AIOS Layer 1: Identity & Core Directives
+- **[AGENTS.md](../AGENTS.md)** - System identity, positive MUST-FOLLOW rules (3-Step Documentation Cascade), negative NEVER-DO restrictions, and Anti-Rot DoD.
+- **[GitHub & Branching Workflow](../.agents/rules/github-workflow.md)** - [Always On] Standard & Fast-track git workflows, commit conventions, PR protocol, 5-W framework.
 
-## 3. Ranh giới Kỹ thuật & DevOps (.agents/)
-- [Notion API Limits](../.agents/rules/notion-limits.md) - Quy định cứng về việc giới hạn tốc độ (Rate Limit) và cấm sử dụng chạy song song vô tội vạ (`Promise.all`) khi giao tiếp với Notion API.
-- [Deploy Check Workflow](../.agents/workflows/deploy-check.md) - Checklist 3 bước bắt buộc phải rà soát (Validate Env, Build, IAM Permissions) trước khi đẩy code lên GCP Cloud Run.
+## AIOS Layer 2: Memory & Context Management
+- **[System Specification (spec.md)](./spec.md)** - Core architecture, tech stack, data flows, and multi-model routing.
+- **[4-Layer System & DB Schemas](./agents/context.md)** - Operational layers (Sensors, Governance, Tools, Skills) and 3-tier Notion database schema.
+- **[Notion Database Setup](./notion_database_setup.md)** - Setup guide for Notion databases (Tasks, Projects, Daily Logs, Areas, Resources).
 
-## 4. Lịch sử Nâng cấp & Bài học (History & Retrospectives)
-- [Changelog & Refactoring Notes](./changelog.md) - Ghi chép chi tiết các đợt đập đi xây lại (Refactoring) và bài học kinh nghiệm vận hành GCP.
-- [Sprint 01 Retrospective](./retrospectives/sprint-01.md) - Đánh giá quá trình thiết lập hạ tầng và thông suốt luồng dữ liệu cơ bản.
+## AIOS Layer 3: Workflows & SOPs (`.agents/workflows/`)
+- **[Bug Hunting Workflow](../.agents/workflows/bug-hunting.md)** - 4-step bug triage and remediation.
+- **[Deploy Check Workflow](../.agents/workflows/deploy-check.md)** - Pre-deploy checklist for GCP Cloud Run.
 
-## 5. Hướng dẫn Sử dụng (User Manuals)
-- [User Manual (Tiếng Việt)](./usage.md)
-- [User Manual (English)](./usage.en.md)
-- [Weekly Plan Workflow](./weekly_plan.md) - Chi tiết cách thức vận hành tính năng lập kế hoạch tuần bằng ngôn ngữ tự nhiên.
+## AIOS Layer 4: Modular Skills (`.agents/skills/` & `src/skills/`)
+- **[Orchestrator Skill](../.agents/skills/orchestrator/SKILL.md)** - Multi-agent execution loop, self-healing runner, and HITL triggers.
+
+## AIOS Layer 5: Tools & System Integrations (`src/tools/`)
+- **[Notion API Limits](../.agents/rules/notion-limits.md)** - Rate limiting (3 rps) and throttle rules.
+- **[Centralized Messages](../.agents/rules/centralized-messages.md)** - UI/Bot text message centralization rules.
+
+---
+
+## Issue Plans & Solutions Archive (`docs/plans/`)
+- **[Issue #16: Rollover & Defer Task Logic](./plans/issue-16/solution_report.md)** ([Plan](./plans/issue-16/plan.md))
+- **[Issue #18: Support Time in Task Dates](./plans/issue-18/solution_report.md)** ([Plan](./plans/issue-18/plan.md))
+- **[Issue #21: View Task UI Refactoring](./plans/issue-21/solution_report.md)** ([Plan](./plans/issue-21/plan.md))
+- **[Issue #23: Conversational Weekly Scheduler V2](./plans/issue-23/solution_report.md)** ([Plan](./plans/issue-23/plan.md))
+- **[Issue #25: Weekly Scheduler Output Enhancements](./plans/issue-25/solution_report.md)** ([Plan](./plans/issue-25/plan.md))
+- **[Issue #27: Fix Scheduler Overlap Logic](./plans/issue-27/solution_report.md)** ([Plan](./plans/issue-27/plan.md))
+- **[Issue #29: Hybrid Model Routing (LITE vs PRO)](./plans/issue-29/solution_report.md)** ([Plan](./plans/issue-29/plan.md))
+- **[Issue #31: Fix Temporal Slot Overlaps](./plans/issue-31/solution_report.md)** ([Plan](./plans/issue-31/plan.md))
+- **[Issue #33: Rebuild into 4-Layer Closed-Loop System](./plans/issue-33/solution_report.md)** ([Plan](./plans/issue-33/plan.md))
+- **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)** ([Plan](./plans/issue-37/plan.md))
+
+---
+
+## Human Reviewer Hub (`docs/artifacts/`)
+- **[Project Evolution & Engineering Journey](./artifacts/PROJECT_JOURNEY.md)** - Living project log, milestones, architectural decisions, and release notes for project reviewers.
+- **[Changelog & Refactoring Notes](./artifacts/changelog.md)** - Major version release notes and architectural refactoring logs.
