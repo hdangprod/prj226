@@ -3,9 +3,14 @@ title: "Changelog & Refactoring Notes"
 version: 1.1.0
 date: 2026-06-20
 type: changelog
+ai_policy: "human_reviewer_only"
 ---
 
 # Changelog & Refactoring Notes
+
+> [!CAUTION]
+> **AI AGENT TOKEN GUARD**: This file is intended exclusively for human reviewers and project documentation. AI agents MUST NOT auto-load or process this file during standard coding tasks unless explicitly requested by the user.
+
 
 Tài liệu này ghi chú lại các đợt refactor và thay đổi cấu trúc mã nguồn để hỗ trợ việc review trong tương lai.
 

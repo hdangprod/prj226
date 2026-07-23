@@ -1,22 +1,23 @@
 ---
-description: # Quy trình Tiếp nhận và Xử lý Bug qua Screenshot/Logs
+trigger: model_decision
 ---
 
-Khi User cung cấp thông tin mô tả lỗi, logs, hoặc hình ảnh chụp màn hình (Screenshot), AI phải thực hiện theo quy trình 4 bước nghiêm ngặt sau:
+# Bug Hunting & Issue Remediation Workflow
 
-## Bước 1: Trích xuất & Phân tích (Ingestion)
-- Đọc kỹ mô tả của User. Nếu có Screenshot, phân tích các thành phần giao diện bị lỗi, mã lỗi hiển thị (HTTP Status, Stack Trace nếu có).
-- Khớp mã lỗi hoặc hành vi lỗi với cấu trúc thư mục hiện tại của dự án để khoanh vùng các file bị ảnh hưởng.
+When processing user error descriptions, logs, or screenshots:
 
-## Bước 2: Tái hiện & Định vị lỗi (Root Cause Analysis)
-- Tìm kiếm trong codebase các vị trí có khả năng gây lỗi (ví dụ: các đoạn gọi API Notion, Gemini hoặc Firestore).
-- Kiểm tra các ranh giới kỹ thuật đã quy định (ví dụ: lỗi Rate Limit, lỗi thiếu biến môi trường).
+## 1. Ingestion & Analysis
+- Parse error descriptions, stack traces, and UI screenshots.
+- Match error codes or behavior with project directory structure to isolate affected components.
 
-## Bước 3: Đề xuất Giải pháp & Tạo Issue
-- Tạo một Bug Issue với đầy đủ thông tin: Triệu chứng lỗi (Symptom), Nguyên nhân gốc rễ (Root Cause), và Giải pháp đề xuất (Proposed Solution).
-- Chờ User duyệt giải pháp và xác nhận thứ tự ưu tiên (Prioritize) trước khi sửa code.
+## 2. Root Cause Analysis
+- Search codebase for failure locations (Notion, Gemini, or Firestore calls).
+- Verify constraints (rate limits, missing env variables, layer boundaries).
 
-## Bước 4: Sửa lỗi & Đóng vòng lặp (Resolution)
-- Tiến hành sửa lỗi code.
-- Chạy biên dịch build kiểm tra hệ thống.
-- Viết Commit message gắn thẻ Issue ID, gửi Báo cáo sửa lỗi cho User và đóng Issue.
+## 3. Proposal & Issue Creation
+- Create a Bug Issue containing: Symptom, Root Cause, and Proposed Solution.
+- Obtain approval before modifying source code.
+
+## 4. Remediation & Verification
+- Implement fix and verify via `npm run build` and tests.
+- Commit with Issue ID, notify user, and close issue.
