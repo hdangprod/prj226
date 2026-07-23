@@ -1,6 +1,6 @@
 ---
 title: "Knowledge Index: Telegram Bot Notion Second Brain"
-version: 2.3.0
+version: 2.4.0
 date: 2026-07-23
 type: index
 ---
