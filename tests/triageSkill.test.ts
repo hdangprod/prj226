@@ -3,6 +3,7 @@ import { flushInbox, handleTriageInput, setMockInboxItems } from '../src/skills/
 import { TRIAGE_CONFIG } from '../src/config';
 
 async function runTriageTests() {
+  process.env.NODE_ENV = 'test';
   console.log('--- STARTING TRIAGE SKILL INTEGRATION TESTS (MOD-08) ---');
   const testChatId = 999111;
 
