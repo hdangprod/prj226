@@ -62,3 +62,9 @@ export const TRIAGE_CONFIG = {
   REDIS_TTL_SOFT_LOCK: parseInt(process.env.REDIS_TTL_SOFT_LOCK || '120', 10),
   REDIS_TTL_HARD_LOCK: parseInt(process.env.REDIS_TTL_HARD_LOCK || '600', 10),
 } as const;
+
+export const TASK_SCHEMA_CONTRACT = {
+  required_fields: ['name', 'projectName'],
+  optional_fields: ['priority', 'estimate', 'dueDate', 'description', 'checklist'],
+} as const;
+
