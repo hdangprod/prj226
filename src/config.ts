@@ -63,6 +63,21 @@ export const TRIAGE_CONFIG = {
   REDIS_TTL_HARD_LOCK: parseInt(process.env.REDIS_TTL_HARD_LOCK || '600', 10),
 } as const;
 
+export const DEBOUNCE_CONFIG = {
+  /** Kill-switch: set FEATURE_DEBOUNCE_BUFFER=OFF to bypass debounce entirely */
+  FEATURE_DEBOUNCE_BUFFER: process.env.FEATURE_DEBOUNCE_BUFFER !== 'OFF',
+  /** Debounce window in ms (default 4000ms, configurable for A/B testing) */
+  BUFFER_TIME_MS: parseInt(process.env.DEBOUNCE_BUFFER_TIME_MS || '4000', 10),
+  /** Redis key TTL in seconds (fail-safe against memory leak ERR-03) */
+  REDIS_KEY_TTL_S: parseInt(process.env.DEBOUNCE_REDIS_TTL_S || '30', 10),
+  /** Max messages per buffer before spam truncation (ERR-02) */
+  MAX_BUFFER_SIZE: parseInt(process.env.DEBOUNCE_MAX_BUFFER_SIZE || '15', 10),
+  /** Optional: Whitelist chat IDs for phased rollout (comma-separated) */
+  WHITELIST_CHAT_IDS: process.env.DEBOUNCE_WHITELIST_CHAT_IDS
+    ? process.env.DEBOUNCE_WHITELIST_CHAT_IDS.split(',').map(Number)
+    : null,
+} as const;
+
 export const TASK_SCHEMA_CONTRACT = {
   required_fields: ['name', 'projectName'],
   optional_fields: ['priority', 'estimate', 'dueDate', 'description', 'checklist'],

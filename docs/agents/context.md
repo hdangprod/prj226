@@ -33,6 +33,9 @@ Responsible for ingesting all input signals (text, audio/voice, URLs) from the T
   - If `QUEUE_MODE === 'cloud_tasks'`: Pushes the payload to GCP Cloud Tasks queue to invoke the `/worker` endpoint.
 - **`voiceProcessor.ts`**: Handles audio/voice inputs (`.ogg` format) from Telegram. Downloads the audio file via Telegram API, passes it to the Gemini API (`inlineData`, `audio/ogg`) to transcribe the text, and strips filler words (e.g., "ờ", "à", "uhm").
 
+#### Debounce Buffer (MOD-07)
+The Sensor Layer includes a serverless debounce buffer (`src/sensors/debounceBuffer.ts`) that batches rapid-fire Telegram messages using Upstash Redis (in-memory list accumulator) and QStash (delayed HTTP callback). Messages within a configurable window (default 4s) are merged into a single AI request. Infrastructure dependencies: `@upstash/redis` (REST-based, serverless-safe), `@upstash/qstash` (delayed message queue with signature verification).
+
 ### 1.2 Governance Layer (`src/governance/`)
 Orchestrates request routing using probabilistic intent evaluation.
 - **`intentRouter.ts`**: Uses the Gemini LITE model to evaluate user intent (Add Task, Rescue, Highlight, Weekly Planning) and generates a `confidence_score`.

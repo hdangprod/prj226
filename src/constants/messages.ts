@@ -67,5 +67,8 @@ export const BOT_MESSAGES = {
   },
   GREETINGS: {
     WELCOME: 'Chào Sếp! Tôi là Liam, trợ lý Second Brain của Sếp. 🧠\n\nCác lệnh:\n• <code>/add_task &lt;text&gt;</code> — Tạo task\n• <code>/today</code> — Task hôm nay\n• <code>/rescue</code> — Tìm task cứu vãn tập trung\n• <code>/highlight &lt;text&gt;</code> — Ghi nhận thành tựu\n• <code>/weekly_planning &lt;text&gt;</code> — Lập kế hoạch tuần\n• <code>/weekly_report</code> — Báo cáo tuần',
-  }
+  },
+  DEBOUNCE: {
+    SPAM_TRUNCATED: '[Hệ thống đã cắt bớt do spam]',
+  },
 } as const;

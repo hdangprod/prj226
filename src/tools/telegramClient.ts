@@ -44,6 +44,9 @@ async function callTelegramApi(endpoint: string, payload: any, retries = 3): Pro
       console.log(`[Telegram Mock] editMessageText to ${payload.chat_id}: ${payload.text}`);
     } else if (endpoint === 'answerCallbackQuery') {
       console.log(`[Telegram Mock] answerCallbackQuery (id: ${payload.callback_query_id})`);
+    } else if (endpoint === 'sendChatAction') {
+      sentMessages.push({ chatId: payload.chat_id, text: `__chat_action:${payload.action}` });
+      console.log(`[Telegram Mock] sendChatAction to ${payload.chat_id}: ${payload.action}`);
     }
     return { message_id: 12345 };
   }
@@ -161,4 +164,19 @@ export async function downloadFile(filePath: string): Promise<ArrayBuffer> {
     throw new Error(`[Telegram] Failed to download file from path: ${filePath}, status: ${response.status}`);
   }
   return response.arrayBuffer();
+}
+
+/**
+ * Sends a chat action indicator (e.g., "typing...", "recording voice...").
+ * Telegram auto-dismisses the action after 5s or when a message is sent.
+ * PRD MOD-07 Section 3.1 Req 5: Perceived Latency Mitigation.
+ */
+export async function sendChatAction(
+  chatId: number | string,
+  action: 'typing' | 'record_voice' = 'typing'
+): Promise<any> {
+  return callTelegramApi('sendChatAction', {
+    chat_id: chatId,
+    action: action,
+  });
 }

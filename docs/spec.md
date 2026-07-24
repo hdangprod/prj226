@@ -56,6 +56,26 @@ Ingests raw Telegram update signals (text, `.ogg` voice notes, URLs), transcribe
 - `eventDispatcher.ts`: Routes payload synchronously (`QUEUE_MODE='sync'`) or asynchronously via GCP Cloud Tasks (`QUEUE_MODE='cloud_tasks'`).
 - `voiceProcessor.ts`: Downloads `.ogg` audio files, calls Gemini LITE to transcribe, and strips filler words.
 
+### Debounce Buffer (MOD-07)
+
+Serverless message batching layer that accumulates rapid-fire messages in Upstash Redis and flushes them as a single merged payload after 4s of inactivity.
+
+**Data Contract (Redis Keys)**:
+- `buffer:${chatId}` — Redis List (RPUSH only, EXPIRE 30s)
+- `buffer_time:${chatId}` — Redis String, Unix timestamp ms (EXPIRE 30s)
+- `is_transcribing:${chatId}` — Redis String, voice transcription lock (EXPIRE 30s)
+
+**Architecture**:
+1. **Ingestion** (`ingestMessage`): RPUSH text → SET timestamp → schedule QStash 4s delay
+2. **Execution** (`processBuffer`): Check staleness → LRANGE+DEL → join with `\n` → `handleWorkerPayload`
+3. **Bypass**: Reply messages (`reply_to_message_id`) skip debounce entirely
+4. **Fail-Open**: Redis unavailable → dispatch directly (ERR-05)
+5. **Spam Protection**: Max 15 messages per buffer (ERR-02)
+6. **Voice Lock**: `is_transcribing` flag suppresses timer during STT (PRD 3.1 Req 6)
+7. **Kill-Switch**: `FEATURE_DEBOUNCE_BUFFER=OFF` env var
+
+**Dependencies**: `@upstash/redis`, `@upstash/qstash`
+
 ### 2. Governance Layer (`src/governance/`)
 Probabilistic routing and session state management.
 - `intentRouter.ts`: Evaluates intent (`Add Task`, `Rescue`, `Highlight`, `Weekly Planning`) using Gemini LITE. Routes score $\ge 95\%$ to Skills/Tools, and score $< 95\%$ to HITL.

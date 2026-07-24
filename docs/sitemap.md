@@ -71,8 +71,12 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │       └── PROJECT_JOURNEY.md         # Living project timeline & engineering log
 ├── tests/
 │   ├── localTest.ts                   # Integration test harness
-│   └── triageSkill.test.ts            # MOD-08 Triage Skill integration tests
+│   ├── triageSkill.test.ts            # MOD-08 Triage Skill integration tests
+│   └── debounceBuffer.test.ts         # MOD-07 Debounce Buffer integration tests
 └── src/                               # TypeScript application source code
+    ├── sensors/debounceBuffer.ts       # MOD-07 Serverless Debounce Buffer (ingestion + execution)
+    ├── tools/redisClient.ts           # Upstash Redis client wrapper (atomic RPUSH + TTL)
+    ├── tools/qstashClient.ts          # Upstash QStash delayed message queue client
     ├── tools/triageLockTool.ts        # Hard/Soft & Distributed Lock Manager
     └── skills/triageSkill.ts          # Multi-threaded Inbox Triage Skill
 ```
