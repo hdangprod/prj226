@@ -10,6 +10,7 @@ class TriageLockTool {
   private softLocks = new Map<string, LockRecord>();
   private distributedLocks = new Map<string, LockRecord>();
   private turnCounters = new Map<string, { count: number; expiresAt: number }>();
+  private originalBubbleLocks = new Map<string, LockRecord>();
 
   private cleanExpired() {
     const now = Date.now();
@@ -24,6 +25,9 @@ class TriageLockTool {
     }
     for (const [key, record] of this.turnCounters.entries()) {
       if (now > record.expiresAt) this.turnCounters.delete(key);
+    }
+    for (const [key, record] of this.originalBubbleLocks.entries()) {
+      if (now > record.expiresAt) this.originalBubbleLocks.delete(key);
     }
   }
 
@@ -46,6 +50,27 @@ class TriageLockTool {
       return null;
     }
     return record.value;
+  }
+
+  // --- Original Bubble Map ---
+  public setOriginalBubbleId(chatId: string | number, notionPageId: string, messageId: string | number, ttlSeconds = TRIAGE_CONFIG.REDIS_TTL_HARD_LOCK): void {
+    this.cleanExpired();
+    const key = `triage_bubble:${chatId}:${notionPageId}`;
+    this.originalBubbleLocks.set(key, {
+      value: String(messageId),
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+  }
+
+  public getOriginalBubbleId(chatId: string | number, notionPageId: string): number | null {
+    this.cleanExpired();
+    const key = `triage_bubble:${chatId}:${notionPageId}`;
+    const record = this.originalBubbleLocks.get(key);
+    if (!record || Date.now() > record.expiresAt) {
+      this.originalBubbleLocks.delete(key);
+      return null;
+    }
+    return parseInt(record.value, 10);
   }
 
   // --- Soft Lock ---
@@ -118,6 +143,7 @@ class TriageLockTool {
     this.softLocks.clear();
     this.distributedLocks.clear();
     this.turnCounters.clear();
+    this.originalBubbleLocks.clear();
   }
 }
 

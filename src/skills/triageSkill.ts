@@ -1,6 +1,6 @@
 import { sendMessage, editMessageText } from '../tools/telegramClient';
 import { triageLockTool } from '../tools/triageLockTool';
-import { TRIAGE_CONFIG } from '../config';
+import { TRIAGE_CONFIG, TASK_SCHEMA_CONTRACT } from '../config';
 import { parseTaskInput } from '../tools/geminiClient';
 import { findProjectByName, fetchActiveProjects, createTask, getOrCreateDailyLog } from '../tools/notionClient';
 
@@ -49,6 +49,8 @@ export async function flushInbox(chatId: string | number): Promise<void> {
     if (sentMsg?.message_id) {
       // Set Hard Lock mapping Telegram Message ID -> Notion Page ID (TTL 600s)
       triageLockTool.setHardLock(chatId, sentMsg.message_id, item.id, TRIAGE_CONFIG.REDIS_TTL_HARD_LOCK);
+      // Map original bubble ID for UI Closure on recursive replies (AC 4.4)
+      triageLockTool.setOriginalBubbleId(chatId, item.id, sentMsg.message_id, TRIAGE_CONFIG.REDIS_TTL_HARD_LOCK);
     }
 
     // Throttle delay 300ms to prevent Telegram API rate limits (ERR-429)
@@ -100,10 +102,12 @@ export async function handleTriageInput(
     const currentIso = new Date().toISOString();
     const parsedInput = await parseTaskInput(userText, currentIso);
 
-    // Schema Contract Validation: Check required fields
-    const hasProject = Boolean(parsedInput.projectName);
+    // Schema Contract Validation: Data-driven diff against required_fields (Section 3.3)
+    const missingFields = TASK_SCHEMA_CONTRACT.required_fields.filter(
+      (field) => !parsedInput[field as keyof typeof parsedInput]
+    );
 
-    if (!hasProject) {
+    if (missingFields.length > 0) {
       // Incomplete schema: Set Soft Lock and ask AI clarification question
       triageLockTool.setSoftLock(chatId, targetNotionPageId, TRIAGE_CONFIG.REDIS_TTL_SOFT_LOCK);
 
@@ -142,12 +146,28 @@ export async function handleTriageInput(
 
     await sendMessage(chatId, `✅ <b>[TẠO TASK THÀNH CÔNG]</b>\nTask: <b>${parsedInput.name}</b>\nDự án: <b>${parsedInput.projectName}</b>`);
 
-    if (replyToMessageId) {
+    // UI Closure (AC 4.4): Strikethrough original bubble UI & current message
+    const originalBubbleMsgId = triageLockTool.getOriginalBubbleId(chatId, targetNotionPageId);
+    const targetMsgIdToEdit = originalBubbleMsgId || replyToMessageId;
+
+    if (targetMsgIdToEdit) {
+      try {
+        await editMessageText(
+          chatId,
+          targetMsgIdToEdit,
+          `<s>📥 [INBOX ITEM] ${parsedInput.name}</s>\n\n<b>*[✅ ĐÃ CHUYỂN THÀNH TASK]*</b>`
+        );
+      } catch (e) {
+        // Ignore edit error if message cannot be edited
+      }
+    }
+
+    if (replyToMessageId && replyToMessageId !== targetMsgIdToEdit) {
       try {
         await editMessageText(
           chatId,
           replyToMessageId,
-          `<s>📥 [INBOX ITEM] ${parsedInput.name}</s>\n\n<b>*[✅ ĐÃ CHUYỂN THÀNH TASK]*</b>`
+          `<s>${userText}</s>\n\n<b>*[✅ ĐÃ CHUYỂN THÀNH TASK]*</b>`
         );
       } catch (e) {
         // Ignore edit error if message cannot be edited

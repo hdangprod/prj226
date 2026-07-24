@@ -1,6 +1,19 @@
+// Set up environments for offline testing before importing any config-dependent code
+process.env.NODE_ENV = 'test';
+process.env.QUEUE_MODE = 'sync';
+process.env.TELEGRAM_BOT_TOKEN = 'mock-bot-token';
+process.env.NOTION_API_KEY = 'mock-notion-key';
+process.env.NOTION_AREAS_DB_ID = 'mock-areas-id';
+process.env.NOTION_PROJECTS_DB_ID = 'mock-projects-id';
+process.env.NOTION_DAILY_LOGS_DB_ID = 'mock-daily-logs-id';
+process.env.NOTION_TASKS_DB_ID = 'mock-tasks-id';
+process.env.NOTION_RESOURCES_DB_ID = 'mock-resources-id';
+process.env.GEMINI_API_KEY = 'mock-gemini-key';
+
 import { triageLockTool } from '../src/tools/triageLockTool';
 import { flushInbox, handleTriageInput, setMockInboxItems } from '../src/skills/triageSkill';
 import { TRIAGE_CONFIG } from '../src/config';
+
 
 async function runTriageTests() {
   console.log('--- STARTING TRIAGE SKILL INTEGRATION TESTS (MOD-08) ---');
@@ -68,6 +81,33 @@ async function runTriageTests() {
   await flushInbox(testChatId);
   console.log('✅ PASS: Inbox flush execution completed cleanly.');
 
+  // Test 6: Stale UI Degradation (AC 4.3)
+  console.log('\n[TEST 6] Testing Stale UI Degradation (AC 4.3)...');
+  const expiredMsgId = 88888;
+  await handleTriageInput(testChatId, 'Task test', expiredMsgId, 'non-existent-page');
+  console.log('✅ PASS: Expired bubble handled cleanly.');
+
+  // Test 7: Recursive Reply Mapping & Original Bubble ID (AC 4.4)
+  console.log('\n[TEST 7] Testing Recursive Reply Mapping & Original Bubble ID (AC 4.4)...');
+  const origBubbleId = 7771;
+  const aiQuestionMsgId = 7772;
+  const targetPageId = 'page-recursive-test';
+
+  triageLockTool.setHardLock(testChatId, origBubbleId, targetPageId, 600);
+  triageLockTool.setOriginalBubbleId(testChatId, targetPageId, origBubbleId, 600);
+  triageLockTool.setHardLock(testChatId, aiQuestionMsgId, targetPageId, 600);
+
+  const mappedOriginal = triageLockTool.getOriginalBubbleId(testChatId, targetPageId);
+  const mappedPageFromAiQuestion = triageLockTool.getHardLock(testChatId, aiQuestionMsgId);
+
+  if (mappedOriginal !== origBubbleId) {
+    throw new Error(`Original bubble ID mismatch: expected ${origBubbleId}, got ${mappedOriginal}`);
+  }
+  if (mappedPageFromAiQuestion !== targetPageId) {
+    throw new Error(`AI question hard lock mismatch: expected ${targetPageId}, got ${mappedPageFromAiQuestion}`);
+  }
+  console.log('✅ PASS: Recursive reply mapping & original bubble tracking verified.');
+
   console.log('\n==================================================');
   console.log('🎉 ALL TRIAGE SKILL INTEGRATION TESTS PASSED (100%)');
   console.log('==================================================\n');
@@ -80,3 +120,4 @@ if (require.main === module) {
     process.exit(1);
   });
 }
+

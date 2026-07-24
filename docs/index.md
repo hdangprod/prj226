@@ -47,6 +47,7 @@ Welcome to the **Telegram Bot Notion Second Brain Orchestrator** knowledge index
 - **[Issue #31: Fix Temporal Slot Overlaps](./plans/issue-31/solution_report.md)** ([Plan](./plans/issue-31/plan.md))
 - **[Issue #33: Rebuild into 4-Layer Closed-Loop System](./plans/issue-33/solution_report.md)** ([Plan](./plans/issue-33/plan.md))
 - **[Issue #37: AIOS 5-Layer Alignment & Token Optimization](./plans/issue-37/solution_report.md)** ([Plan](./plans/issue-37/plan.md))
+- **[Issue #44: MOD-08 Triage Skill](./plans/issue-44/solution_report.md)** ([Plan](./plans/issue-44/plan.md))
 
 ---
 
