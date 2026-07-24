@@ -66,7 +66,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   ├── issue-33/                  # Rebuild into 4-Layer Closed-Loop System (plan.md, solution_report.md)
 │   │   ├── issue-37/                  # AIOS 5-Layer Alignment (plan.md, solution_report.md)
 │   │   ├── issue-40/                  # Dynamic Rule Loading Engine (plan.md, solution_report.md)
-│   │   └── issue-44/                  # MOD-08 Triage Skill (plan.md, solution_report.md)
+│   │   ├── issue-44/                  # MOD-08 Triage Skill (plan.md, solution_report.md)
+│   │   └── issue-48/                  # MOD-07 Serverless Debounce Buffer (solution_report.md)
 │   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
 │       └── PROJECT_JOURNEY.md         # Living project timeline & engineering log
 ├── tests/
