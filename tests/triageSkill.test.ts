@@ -71,6 +71,7 @@ async function runTriageTests() {
   console.log('\n==================================================');
   console.log('🎉 ALL TRIAGE SKILL INTEGRATION TESTS PASSED (100%)');
   console.log('==================================================\n');
+  process.exit(0);
 }
 
 if (require.main === module) {

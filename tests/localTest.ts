@@ -508,6 +508,7 @@ async function runTests() {
   }
 
   console.log('=== All Offline Integration Tests passed successfully! ===');
+  process.exit(0);
 }
 
 runTests();
