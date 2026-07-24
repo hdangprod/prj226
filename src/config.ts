@@ -55,3 +55,10 @@ export const MODELS = {
   LITE: process.env.GEMINI_MODEL_LITE || 'gemini-3.1-flash-lite',
   PRO: process.env.GEMINI_MODEL_PRO || 'gemini-3.5-flash',
 } as const;
+
+export const TRIAGE_CONFIG = {
+  FEATURE_TRIAGE_MODE: process.env.FEATURE_TRIAGE_MODE !== 'OFF',
+  THROTTLE_MSG_DELAY_MS: parseInt(process.env.THROTTLE_MSG_DELAY_MS || '300', 10),
+  REDIS_TTL_SOFT_LOCK: parseInt(process.env.REDIS_TTL_SOFT_LOCK || '120', 10),
+  REDIS_TTL_HARD_LOCK: parseInt(process.env.REDIS_TTL_HARD_LOCK || '600', 10),
+} as const;

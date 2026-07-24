@@ -84,7 +84,13 @@ function orchestrate() {
   if (!activeTicket) {
     activeTicket = tickets.find(t => t.status === 'TODO' || t.status === 'IN_PROGRESS');
     if (!activeTicket) {
-      console.log("[SUPREME AGENT] Success! All Epic Tickets are completed. System is stable.");
+      console.log("[SUPREME AGENT] All Epic Tickets completed. Triggering Checkpoint 3 (Ground-Truth Evals Gate)...");
+      try {
+        runCmd('npm run evals');
+        console.log("[SUPREME AGENT] Success! Ground-Truth Evals Passed (>= 95%). System is stable.");
+      } catch (evalErr) {
+        console.error("[EVALS_FAILED] Benchmark Ground-Truth Evaluation failed (< 95%). Accuracy regression detected.");
+      }
       return;
     }
     state.currentTicketId = activeTicket.id;
@@ -93,6 +99,15 @@ function orchestrate() {
   }
 
   console.log(`[SUPREME AGENT] Processing Ticket: ${activeTicket.id} - ${activeTicket.title}`);
+
+  // Dynamic Rule Engine Injection
+  console.log(`[SUPREME AGENT] Pre-execution Gate: Resolving dynamic domain rules for layer [${activeTicket.layer}]...`);
+  try {
+    const rulesOutput = runCmd(`node .agents/scripts/rule-engine.js --keyword ${activeTicket.layer || 'default'}`);
+    console.log(`[SUPREME AGENT] Dynamic Rules Loaded:\n${rulesOutput.slice(0, 200)}...`);
+  } catch (ruleErr) {
+    console.warn(`[SUPREME AGENT] Rule engine resolution warning: ${ruleErr.message}`);
+  }
 
   const branchName = `feature/ticket-${activeTicket.id}`;
   const currentGitBranch = runCmd('git rev-parse --abbrev-ref HEAD');

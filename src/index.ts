@@ -25,14 +25,27 @@ export const helloHttp: HttpFunction = async (req, res) => {
 
   // Telegram webhook route
   console.log('[Webhook] Received Telegram update payload.');
+
+  // Bot Webhook Protection (PRD MOD-08 Section 3.2 Yêu cầu 5)
+  if (req.body?.message?.from?.is_bot === true) {
+    console.log('[Webhook] Bot Webhook Protection: Dropped update from bot user.');
+    res.status(200).send('OK');
+    return;
+  }
+
   try {
-    // Dispatch execution (async in cloud_tasks mode, sync inline in sync mode)
-    // Note: dispatch is async but we do NOT await it here if in cloud_tasks mode
-    // to allow early response, but we await it in sync mode to allow local tests to succeed.
+    // Debounce Bypass (PRD MOD-08 Section 3.2 Yêu cầu 1)
+    const isReplyMessage = Boolean(req.body?.message?.reply_to_message_id);
+    if (isReplyMessage) {
+      console.log('[Webhook] Debounce Bypass: Reply detected. Processing directly via intentRouter...');
+      await handleWorkerPayload(req.body);
+      res.status(200).send('OK');
+      return;
+    }
+
     if (process.env.QUEUE_MODE === 'sync') {
       await dispatch(req.body);
     } else {
-      // Fire-and-forget push to Cloud Tasks (which runs extremely fast)
       dispatch(req.body).catch((err) => {
         console.error('[Webhook] Failed to dispatch payload asynchronously:', err);
       });
@@ -41,6 +54,5 @@ export const helloHttp: HttpFunction = async (req, res) => {
     console.error('[Webhook] Error during payload dispatch:', error);
   }
 
-  // Instantly return 200 OK to Telegram to avoid duplicates
   res.status(200).send('OK');
 };

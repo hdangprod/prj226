@@ -67,11 +67,13 @@ Deterministic API clients without AI reasoning. Encapsulates error handling, ret
 - `firestoreClient.ts`: Serverless session state, planning draft persistence, and TTL cleanup.
 - `googleClient.ts`: Google Calendar API integration for busy slot lookups.
 - `telegramClient.ts`: Low-level Telegram Bot API wrappers with HTML parse mode.
+- `triageLockTool.ts`: State lock management for Hard Locks (`triage_map`), Soft Locks (`active_triage_session`), and Distributed Locks (`SETNX`).
 
 ### 4. Skills Layer (`src/skills/`)
 Stateful multi-tool workflow orchestration.
 - `taskCaptureSkill.ts`: Parses natural language tasks, matches projects/areas, generates task prefixes, and commits pages to Notion.
 - `weeklyPlanningSkill.ts`: Synthesizes Google Calendar busy slots with Gemini PRO reasoning to output conflict-free weekly schedules and manage Firestore draft approval flows.
+- `triageSkill.ts`: Multi-threaded Inbox Routing & Dynamic State Lock for Telegram native replies and Notion Inbox Tray item classification.
 
 ---
 
@@ -114,8 +116,14 @@ The project uses a vendor-agnostic Dynamic Rule Loading Engine to manage agent c
 ├── workflows/
 │   ├── bug-hunting.md             → [On-Demand] Bug triage & remediation
 │   └── deploy-check.md            → [On-Demand] GCP Cloud Run pre-deploy checklist
-└── skills/
-    └── orchestrator/              → Multi-agent execution loop & self-healing
+├── skills/
+│   └── orchestrator/              → Multi-agent execution loop, self-healing runner & 4 Harness Gates
+│       ├── SKILL.md               → Orchestrator SOP & self-healing laws
+│       ├── scripts/
+│       │   ├── supreme_assistant.js → Ticket orchestrator & Rule Engine pre-check
+│       │   ├── test_runner.js      → Checkpoint 1 (npm test, retry loop & Git Rollback)
+│       │   └── review_dispatcher.js→ Checkpoint 2 (Code Review & Doc Cascade Gate)
+│       └── resources/             → Kanban, execution prompts & state JSONs
 src/
 ├── index.ts                       → Webhook entrypoint & routing initialization
 ├── config.ts                      → Environment validation & model tier definitions
