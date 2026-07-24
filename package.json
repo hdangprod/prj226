@@ -4,10 +4,10 @@
   "description": "Serverless Telegram Bot orchestrating a Notion Second Brain via Gemini AI",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "./node_modules/.bin/tsc",
     "start": "npx @google-cloud/functions-framework --target=helloHttp --source=dist",
-    "test": "npx ts-node tests/localTest.ts && npx ts-node tests/triageSkill.test.ts",
-    "evals": "npx ts-node evals/run-evals.ts",
+    "test": "./node_modules/.bin/ts-node tests/localTest.ts && ./node_modules/.bin/ts-node tests/triageSkill.test.ts",
+    "evals": "./node_modules/.bin/ts-node evals/run-evals.ts",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
     "deploy": "npm run build && gcloud functions deploy telegram-notion-bot --entry-point helloHttp --runtime nodejs20 --trigger-http --allow-unauthenticated"
   },

@@ -28,8 +28,8 @@ function runReviewStage() {
   }
 
   try {
-    console.log("[REVIEW DISPATCHER] Running TypeScript compilation check (npm run build)...");
-    runCmd('npm run build');
+    console.log("[REVIEW DISPATCHER] Running TypeScript compilation check (./node_modules/.bin/tsc)...");
+    runCmd('./node_modules/.bin/tsc');
     console.log("[REVIEW DISPATCHER] 3-Step Documentation Cascade & Build Verification Passed.");
   } catch (buildErr) {
     console.error("[DOC_CASCADE_FAILED] TypeScript compilation (npm run build) failed with errors. Rejecting merge.");

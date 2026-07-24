@@ -42,7 +42,7 @@ function runTests() {
 
   try {
     console.log("[TEST RUNNER] Launching Local Test Harness integration suite...");
-    execSync('npm test', { env: { ...process.env, NODE_ENV: 'test', QUEUE_MODE: 'sync' }, encoding: 'utf8' });
+    execSync('./node_modules/.bin/ts-node tests/localTest.ts && ./node_modules/.bin/ts-node tests/triageSkill.test.ts', { env: { ...process.env, NODE_ENV: 'test', QUEUE_MODE: 'sync' }, encoding: 'utf8' });
     console.log("[TEST RUNNER] Integration Checkpoint Passed Successfully.");
     process.exit(0);
   } catch (executionException) {
