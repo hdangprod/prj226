@@ -50,11 +50,13 @@ Contains raw, deterministic client integrations for external APIs. No AI reasoni
 - **`firestoreClient.ts`**: Manages Firestore reads and writes (user sessions, planning drafts, retro metrics).
 - **`googleClient.ts`**: Integrates Google Calendar for querying busy slots.
 - **`telegramClient.ts`**: Low-level Telegram Bot API wrappers (sendMessage, editMessage, getFile).
+- **`triageLockTool.ts`**: State lock management for Hard Locks (`triage_map`), Soft Locks (`active_triage_session`), and Distributed Locks (`SETNX`).
 
 ### 1.4 Skills Layer (`src/skills/`)
 Implements complex, stateful multi-tool workflows.
 - **`taskCaptureSkill.ts`**: Parses natural language task descriptions, queries active projects, handles project/area matching, auto-prefixes tasks based on count, and creates task pages in Notion.
 - **`weeklyPlanningSkill.ts`**: Uses the Gemini PRO model to parse unstructured weekly schedules, merges them with Google Calendar busy slots, creates structured tasks in Notion with checklist and description metadata, and manages Firestore draft states.
+- **`triageSkill.ts`**: Multi-threaded Inbox Routing & Dynamic State Lock for Telegram native replies and Notion Inbox Tray item classification.
 
 ---
 
@@ -114,4 +116,15 @@ Agent context rules are managed via a vendor-agnostic Dynamic Rule Loading Engin
 |------|-------------|----------|
 | **Global Governance** | `true` | Always emitted (e.g., `github-workflow`) |
 | **Domain-Specific** | `false` | Emitted only on path/keyword match (e.g., `notion-limits`, `centralized-messages`) |
+
+---
+
+## 5. Orchestrator Skill & 4 Harness Gates
+
+The multi-agent execution loop (`.agents/skills/orchestrator/`) enforces 4 production-grade verification gates:
+1. **Dynamic Rule Engine Pre-check**: Invokes `node .agents/scripts/rule-engine.js` to load domain rules before editing code.
+2. **Self-Healing & Git Rollback Protocol**: Runs `scripts/test_runner.js`. If tests fail > 3 times, exports git patch to `.agents/artifacts/failed-ticket-<id>.patch`, executes `git reset --hard HEAD`, and escalates to HITL.
+3. **Documentation Cascade Gate**: Runs `scripts/review_dispatcher.js`. Verifies sync of `docs/spec.md`, `docs/agents/context.md`, `docs/sitemap.md` and enforces 0 errors on `npm run build` before merging.
+4. **Benchmark Ground-Truth Gate**: At Epic completion, executes `npm run evals` ensuring intent accuracy score $\ge 95\%$.
+
 

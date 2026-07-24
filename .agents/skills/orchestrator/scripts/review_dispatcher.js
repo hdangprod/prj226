@@ -16,6 +16,26 @@ function runReviewStage() {
     }
   }
 
+  // 3-Step Documentation Cascade & Build Gate
+  console.log("[REVIEW DISPATCHER] Verifying 3-Step Documentation Cascade & clean build status...");
+  const specPath = path.join(__dirname, '../../../../docs/spec.md');
+  const contextPath = path.join(__dirname, '../../../../docs/agents/context.md');
+  const sitemapPath = path.join(__dirname, '../../../../docs/sitemap.md');
+
+  if (!fs.existsSync(specPath) || !fs.existsSync(contextPath) || !fs.existsSync(sitemapPath)) {
+    console.error("[DOC_CASCADE_FAILED] Mandatory documentation files (spec.md, context.md, sitemap.md) missing or invalid!");
+    process.exit(1);
+  }
+
+  try {
+    console.log("[REVIEW DISPATCHER] Running TypeScript compilation check (npm run build)...");
+    runCmd('npm run build');
+    console.log("[REVIEW DISPATCHER] 3-Step Documentation Cascade & Build Verification Passed.");
+  } catch (buildErr) {
+    console.error("[DOC_CASCADE_FAILED] TypeScript compilation (npm run build) failed with errors. Rejecting merge.");
+    process.exit(1);
+  }
+
   console.log(`[REVIEW DISPATCHER] 100% Approval verified for ticket ${state.currentTicketId}. Merging branch...`);
   
   runCmd('git checkout main');

@@ -56,6 +56,26 @@ function runTests() {
       console.error("[ESCALATION GATE TRIGGERED] Ticket exceeded max failure limit. Halting flow to prevent infinity loop.");
       updateKanbanStatus(state.currentTicketId, 'BLOCKED');
       
+      const artifactDir = path.join(__dirname, '../../../../.agents/artifacts');
+      if (!fs.existsSync(artifactDir)) {
+        fs.mkdirSync(artifactDir, { recursive: true });
+      }
+      const patchPath = path.join(artifactDir, `failed-ticket-${state.currentTicketId}.patch`);
+      try {
+        const diffOutput = execSync('git diff HEAD', { encoding: 'utf8' });
+        fs.writeFileSync(patchPath, diffOutput, 'utf8');
+        console.log(`[ESCALATION GATE] Saved failure patch artifact to ${patchPath}`);
+      } catch (e) {
+        console.warn(`[ESCALATION GATE] Failed to write patch artifact: ${e.message}`);
+      }
+
+      try {
+        execSync('git reset --hard HEAD', { encoding: 'utf8' });
+        console.log(`[ESCALATION GATE] Successfully executed git reset --hard HEAD. Working tree restored to clean snapshot.`);
+      } catch (e) {
+        console.warn(`[ESCALATION GATE] Git reset failed: ${e.message}`);
+      }
+
       console.log(`\n=======================================================\n`);
       console.log(`[HITL ALERT] ESCALATION GATE REACHED ON TICKET: ${state.currentTicketId}`);
       console.log(`SPECIFICATION BREAK DETECTED. Stack trace output:\n`);

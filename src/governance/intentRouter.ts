@@ -260,6 +260,29 @@ export async function handleWorkerPayload(payload: any): Promise<void> {
 
     if (!text) return;
 
+    // ─── Triage Skill Interceptor (MOD-08) ───
+    const { triageLockTool } = await import('../tools/triageLockTool');
+    const { handleTriageInput, flushInbox } = await import('../skills/triageSkill');
+
+    // Hard Override / Escape Hatch (PRD MOD-08 Section 3.2 Yêu cầu 4 & AC 4.2)
+    if (text.startsWith('/')) {
+      triageLockTool.deleteSoftLock(chatId);
+      if (text.startsWith('/triage')) {
+        await flushInbox(chatId);
+        return;
+      }
+    }
+
+    // Check Triage Soft Lock & Native Reply routing (PRD MOD-08 Section 3.2 Yêu cầu 4)
+    const replyToMessageId = payload?.message?.reply_to_message_id;
+    const activeTriagePageId = triageLockTool.getSoftLock(chatId) || (replyToMessageId ? triageLockTool.getHardLock(chatId, replyToMessageId) : null);
+
+    if (activeTriagePageId && !text.startsWith('/')) {
+      console.log(`[Worker] Triage Interceptor: Active triage soft lock found for chatId ${chatId}, pageId: ${activeTriagePageId}`);
+      await handleTriageInput(chatId, text, replyToMessageId, activeTriagePageId);
+      return;
+    }
+
     // A. Check active session state first
     const session = await loadSession(chatId);
     if (session) {

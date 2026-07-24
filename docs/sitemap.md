@@ -45,7 +45,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
 │   │   └── deploy-check.md            # [AIOS Layer 3 - On-Demand] GCP Cloud Run deployment verification checklist
 │   └── skills/
-│       └── orchestrator/              # [AIOS Layer 4 - On-Demand] Multi-agent execution loop
+│       └── orchestrator/              # [AIOS Layer 4 - On-Demand] Multi-agent execution loop & 4 Harness Gates
 ├── docs/
 │   ├── sitemap.md                     # [AIOS Layer 2] Master AI & System sitemap
 │   ├── index.md                       # [AIOS Layer 2] Master knowledge base index
@@ -65,8 +65,14 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   ├── issue-31/                  # Fix Temporal Slot Overlaps (plan.md, solution_report.md)
 │   │   ├── issue-33/                  # Rebuild into 4-Layer Closed-Loop System (plan.md, solution_report.md)
 │   │   ├── issue-37/                  # AIOS 5-Layer Alignment (plan.md, solution_report.md)
-│   │   └── issue-40/                  # Dynamic Rule Loading Engine (plan.md, solution_report.md)
+│   │   ├── issue-40/                  # Dynamic Rule Loading Engine (plan.md, solution_report.md)
+│   │   └── issue-41/                  # MOD-08 Triage Skill (plan.md, solution_report.md)
 │   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
 │       └── PROJECT_JOURNEY.md         # Living project timeline & engineering log
+├── tests/
+│   ├── localTest.ts                   # Integration test harness
+│   └── triageSkill.test.ts            # MOD-08 Triage Skill integration tests
 └── src/                               # TypeScript application source code
+    ├── tools/triageLockTool.ts        # Hard/Soft & Distributed Lock Manager
+    └── skills/triageSkill.ts          # Multi-threaded Inbox Triage Skill
 ```
