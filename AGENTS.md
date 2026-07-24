@@ -40,6 +40,17 @@ A task or hotfix is considered **Done** ONLY when:
 > `node .agents/scripts/rule-engine.js --path <target_file_path>`
 > Strictly adhere to all domain rules returned in stdout. Rules are managed via `.agents/rules-manifest.json` (SSOT) and loaded dynamically by the rule engine.
 
+### 6. Shell Execution Policy (Host Execution with Guardrails)
+> [!IMPORTANT]
+> **SHELL EXECUTION MODE**:
+> Shell commands (`npm`, `node`, `npx`, `git`) MAY execute with `BypassSandbox: true` to avoid network isolation and NVM/EPERM issues.
+> 
+> **STRICT SAFETY GUARDRAILS (MANDATORY)**:
+> 1. **No Destructive Commands**: NEVER execute destructive shell commands (`rm -rf /`, `mkfs`, system-level configuration changes, or modifying files outside the workspace directory).
+> 2. **Git Safety**: Always ensure the workspace is in a clean Git state or on a dedicated feature branch before executing code-modifying commands.
+> 3. **Targeted Testing**: DO NOT run global `npm test`. Always run targeted tests on specific files (e.g., `npx vitest run <file_path>`).
+> 4. **No Environment Leaks**: Never print or log secret environment variables (`.env`) to stdout during shell command execution.
+
 ---
 
 ## AIOS 5-Layer Structure Index
