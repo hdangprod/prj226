@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "npx @google-cloud/functions-framework --target=helloHttp --source=dist",
-    "test": "npx ts-node tests/localTest.ts && npx ts-node tests/triageSkill.test.ts",
+    "test": "npx ts-node tests/localTest.ts && npx ts-node tests/triageSkill.test.ts && npx ts-node tests/debounceBuffer.test.ts",
     "evals": "npx ts-node evals/run-evals.ts",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
     "deploy": "npm run build && gcloud functions deploy telegram-notion-bot --entry-point helloHttp --runtime nodejs20 --trigger-http --allow-unauthenticated"
@@ -17,6 +17,8 @@
     "@google-cloud/tasks": "^3.1.2",
     "@google/generative-ai": "^0.21.0",
     "@notionhq/client": "^2.2.15",
+    "@upstash/qstash": "^2.11.3",
+    "@upstash/redis": "^1.38.0",
     "dotenv": "^16.4.5",
     "googleapis": "^173.0.0",
     "minimatch": "^10.2.5"

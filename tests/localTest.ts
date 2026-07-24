@@ -9,6 +9,7 @@ process.env.NOTION_DAILY_LOGS_DB_ID = 'mock-daily-logs-id';
 process.env.NOTION_TASKS_DB_ID = 'mock-tasks-id';
 process.env.NOTION_RESOURCES_DB_ID = 'mock-resources-id';
 process.env.GEMINI_API_KEY = 'mock-gemini-key';
+process.env.FEATURE_DEBOUNCE_BUFFER = 'OFF';
 
 // Dynamic require to prevent TS import hoisting from running config validation too early
 const { helloHttp } = require('../src/index');
