@@ -1,31 +1,33 @@
 {
-  "name": "telegram-notion-second-brain",
-  "version": "1.0.0",
-  "description": "Serverless Telegram Bot orchestrating a Notion Second Brain via Gemini AI",
-  "main": "dist/index.js",
+  "name": "prj226-liam-second-brain",
+  "version": "3.0.0",
+  "description": "Dual-Speed AI Second Brain (Liam) — Cloudflare Workers + Neon Postgres + Vercel AI SDK",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "start": "npx @google-cloud/functions-framework --target=helloHttp --source=dist",
-    "test": "npx ts-node tests/localTest.ts && npx ts-node tests/triageSkill.test.ts && npx ts-node tests/debounceBuffer.test.ts",
-    "evals": "npx ts-node evals/run-evals.ts",
-    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
-    "deploy": "npm run build && gcloud functions deploy telegram-notion-bot --entry-point helloHttp --runtime nodejs20 --trigger-http --allow-unauthenticated"
+    "build": "wrangler build",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' tests/localTest.ts",
+    "evals": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' evals/run-evals.ts",
+    "lint": "eslint 'src/**/*.ts'",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^8.6.0",
-    "@google-cloud/functions-framework": "^3.5.1",
-    "@google-cloud/tasks": "^3.1.2",
-    "@google/generative-ai": "^0.21.0",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@neondatabase/serverless": "^0.10.4",
     "@notionhq/client": "^2.2.15",
-    "@upstash/qstash": "^2.11.3",
-    "@upstash/redis": "^1.38.0",
-    "dotenv": "^16.4.5",
-    "googleapis": "^173.0.0",
-    "minimatch": "^10.2.5"
+    "ai": "^4.0.0",
+    "hono": "^4.7.0",
+    "minimatch": "^10.2.5",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250124.0",
     "@types/node": "^20.11.24",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "wrangler": "^3.109.0"
   }
 }

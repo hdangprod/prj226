@@ -1,182 +1,143 @@
-import { config } from '../config';
-
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}`;
-const TELEGRAM_FILE_URL = `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}`;
-
-export interface InlineKeyboardMarkup {
-  inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>>;
-}
-
 /**
- * Mock storage for local test assertions.
+ * PRJ226 v3.0: Telegram Client (Tool Layer)
+ *
+ * Low-level Telegram Bot API wrappers adapted for Cloudflare Workers fetch API.
+ * Replaces: Node.js http/axios calls from v2.0.
+ * All functions use the global fetch() available in Workers.
+ *
+ * Features:
+ *   - sendMessage (HTML parse mode)
+ *   - sendMessageWithKeyboard (inline keyboard)
+ *   - sendChatAction (typing indicator)
+ *   - editMessageText (progressive status updates)
+ *   - answerCallbackQuery
  */
-export const sentMessages: Array<{ chatId: number | string; text: string; replyMarkup?: any }> = [];
-export function clearSentMessages() {
-  sentMessages.length = 0;
-}
 
-/**
- * Escape special characters for Telegram HTML parse mode.
- */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
+import type { Env } from '../config';
 
-/**
- * Sleep helper for backoff
- */
-const sleep = (ms: number) => new Promise((resolve) => resolve(null));
+// ─── Base API Call ────────────────────────────────────────────────────────────
 
-/**
- * Generic request wrapper with exponential backoff for Telegram API calls.
- */
-async function callTelegramApi(endpoint: string, payload: any, retries = 3): Promise<any> {
-  // If in test environment, mock the call offline
-  if (process.env.NODE_ENV === 'test') {
-    if (endpoint === 'sendMessage') {
-      sentMessages.push({ chatId: payload.chat_id, text: payload.text, replyMarkup: payload.reply_markup });
-      console.log(`[Telegram Mock] sendMessage to ${payload.chat_id}: ${payload.text}`);
-    } else if (endpoint === 'editMessageText') {
-      sentMessages.push({ chatId: payload.chat_id, text: payload.text, replyMarkup: payload.reply_markup });
-      console.log(`[Telegram Mock] editMessageText to ${payload.chat_id}: ${payload.text}`);
-    } else if (endpoint === 'answerCallbackQuery') {
-      console.log(`[Telegram Mock] answerCallbackQuery (id: ${payload.callback_query_id})`);
-    } else if (endpoint === 'sendChatAction') {
-      sentMessages.push({ chatId: payload.chat_id, text: `__chat_action:${payload.action}` });
-      console.log(`[Telegram Mock] sendChatAction to ${payload.chat_id}: ${payload.action}`);
-    }
-    return { message_id: 12345 };
-  }
+async function callTelegramAPI(
+  method: string,
+  payload: Record<string, unknown>,
+  env: Env,
+): Promise<Response> {
+  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 
-  let delay = 1000;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(`${TELEGRAM_API_URL}/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const body: any = await response.json();
-
-      if (response.status === 429) {
-        const retryAfter = body.parameters?.retry_after ?? 1;
-        console.warn(`[Telegram] Rate limited (429). Retrying after ${retryAfter}s. Attempt ${attempt + 1}/${retries}`);
-        await sleep(retryAfter * 1000);
-        continue;
-      }
-
-      if (!response.ok || !body.ok) {
-        console.error(`[Telegram] ${endpoint} failed:`, JSON.stringify(body));
-        throw new Error(`[Telegram] ${endpoint} failed: ${JSON.stringify(body)}`);
-      }
-
-      return body.result;
-    } catch (error) {
-      if (attempt === retries) {
-        throw error;
-      }
-      console.warn(`[Telegram] API error on ${endpoint}. Retrying in ${delay}ms...`, error);
-      await sleep(delay);
-      delay *= 2;
-    }
-  }
-}
-
-export async function sendMessage(
-  chatId: number | string,
-  text: string,
-  replyMarkup?: InlineKeyboardMarkup
-): Promise<any> {
-  const payload: any = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: 'HTML',
-  };
-
-  if (replyMarkup) {
-    payload.reply_markup = replyMarkup;
-  }
-
-  return callTelegramApi('sendMessage', payload);
-}
-
-export async function editMessageText(
-  chatId: number | string,
-  messageId: number,
-  text: string,
-  replyMarkup?: InlineKeyboardMarkup
-): Promise<any> {
-  const payload: any = {
-    chat_id: chatId,
-    message_id: messageId,
-    text: text,
-    parse_mode: 'HTML',
-  };
-
-  if (replyMarkup !== undefined) {
-    payload.reply_markup = replyMarkup;
-  }
-
-  return callTelegramApi('editMessageText', payload);
-}
-
-export async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<any> {
-  const payload: any = {
-    callback_query_id: callbackQueryId,
-  };
-
-  if (text) {
-    payload.text = text;
-  }
-
-  return callTelegramApi('answerCallbackQuery', payload);
-}
-
-/**
- * Retrieves file path details from Telegram server for a given file_id.
- */
-export async function getFilePath(fileId: string): Promise<string> {
-  if (process.env.NODE_ENV === 'test') {
-    return `photos/file_${fileId}.ogg`;
-  }
-  const result = await callTelegramApi('getFile', { file_id: fileId });
-  if (!result.file_path) {
-    throw new Error(`[Telegram] getFile did not return a file_path for fileId ${fileId}`);
-  }
-  return result.file_path;
-}
-
-/**
- * Downloads a file from Telegram using its file path and returns it as an ArrayBuffer.
- */
-export async function downloadFile(filePath: string): Promise<ArrayBuffer> {
-  if (process.env.NODE_ENV === 'test') {
-    // Return empty mock buffer for testing
-    return new ArrayBuffer(0);
-  }
-  const url = `${TELEGRAM_FILE_URL}/${filePath}`;
-  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`[Telegram] Failed to download file from path: ${filePath}, status: ${response.status}`);
+    const error = await response.text();
+    console.error(`[TelegramClient] ${method} failed (${response.status}): ${error}`);
   }
-  return response.arrayBuffer();
+
+  return response;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Send a plain or HTML-formatted message.
+ * Automatically truncates to Telegram's 4096 char limit.
+ */
+export async function sendMessage(
+  chatId: number,
+  text: string,
+  env: Env,
+  options?: { disableWebPagePreview?: boolean },
+): Promise<void> {
+  const truncated = text.length > 4096 ? text.substring(0, 4093) + '...' : text;
+  await callTelegramAPI('sendMessage', {
+    chat_id: chatId,
+    text: truncated,
+    parse_mode: 'HTML',
+    disable_web_page_preview: options?.disableWebPagePreview ?? true,
+  }, env);
 }
 
 /**
- * Sends a chat action indicator (e.g., "typing...", "recording voice...").
- * Telegram auto-dismisses the action after 5s or when a message is sent.
- * PRD MOD-07 Section 3.1 Req 5: Perceived Latency Mitigation.
+ * Send a message with inline keyboard buttons.
+ */
+export async function sendMessageWithKeyboard(
+  chatId: number,
+  text: string,
+  keyboard: {
+    inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>>;
+  },
+  env: Env,
+): Promise<void> {
+  const truncated = text.length > 4096 ? text.substring(0, 4093) + '...' : text;
+  await callTelegramAPI('sendMessage', {
+    chat_id: chatId,
+    text: truncated,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    reply_markup: JSON.stringify(keyboard),
+  }, env);
+}
+
+/**
+ * Fire typing indicator — must be fire-and-forget (do not await in webhook handler).
+ * Latency target: < 50ms from webhook receipt.
  */
 export async function sendChatAction(
-  chatId: number | string,
-  action: 'typing' | 'record_voice' = 'typing'
-): Promise<any> {
-  return callTelegramApi('sendChatAction', {
+  chatId: number,
+  action: 'typing' | 'upload_document' | 'find_location',
+  env: Env,
+): Promise<void> {
+  await callTelegramAPI('sendChatAction', {
     chat_id: chatId,
-    action: action,
-  });
+    action,
+  }, env);
+}
+
+/**
+ * Edit an existing message (progressive status updates: "Searching..." → result).
+ */
+export async function editMessageText(
+  chatId: number,
+  messageId: number,
+  text: string,
+  env: Env,
+): Promise<void> {
+  const truncated = text.length > 4096 ? text.substring(0, 4093) + '...' : text;
+  await callTelegramAPI('editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text: truncated,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+  }, env);
+}
+
+/**
+ * Acknowledge an inline keyboard button press (removes loading spinner).
+ */
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text: string | undefined,
+  env: Env,
+): Promise<void> {
+  await callTelegramAPI('answerCallbackQuery', {
+    callback_query_id: callbackQueryId,
+    text,
+    show_alert: false,
+  }, env);
+}
+
+/**
+ * Register the Telegram webhook URL with Bot API.
+ * Call once during deployment setup.
+ */
+export async function setWebhook(workerUrl: string, env: Env): Promise<void> {
+  await callTelegramAPI('setWebhook', {
+    url: `${workerUrl}/webhook`,
+    secret_token: env.TELEGRAM_WEBHOOK_SECRET,
+    allowed_updates: ['message', 'callback_query'],
+    drop_pending_updates: true,
+  }, env);
+  console.log(`[TelegramClient] Webhook set to: ${workerUrl}/webhook`);
 }

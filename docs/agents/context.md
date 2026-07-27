@@ -1,133 +1,85 @@
-# Project Memory: PRJ226 (Liam)
+# Context & Architecture Reference (AIOS Layer 2)
 
-## 1. System Architecture: 4-Layer Closed-Loop System
+## 1. System Overview
 
-This system is organized into four separate, decoupled operational layers plus a test evaluation suite.
+PRJ226 (Liam) is an AI-Native Second Brain & Personal OS built on a serverless, zero-infrastructure-cost dual-speed architecture.
 
-```
-                           +--------------------------+
-                           |     Telegram Webhook     |
-                           +------------+-------------+
-                                        |
-                                        v
-                            [Sensor Layer: Webhook]
-                                        |
-                                        v (dispatch: sync / cloud_tasks)
-                          [Governance: Intent Router] <---> [Firestore (HITL state)]
-                                        |
-                 +----------------------+----------------------+
-                 |                      |                      |
-                 v (Confidence >= 95%)  v (Confidence < 95%)   v
-          [Skills Layer]          [HITL Manager]       [Tool Layer]
-        - taskCaptureSkill      - inline keyboard      - NotionClient
-        - weeklyPlanningSkill                          - FirestoreClient
-                                                       - GoogleClient
-                                                       - TelegramClient
-```
+- **Hot Path (< 2s Latency)**: Real-time execution via Cloudflare Workers (Hono framework), Telegram Webhooks, and Neon Postgres (`pgvector`).
+- **Cold Path (Nightly Batch)**: Deep knowledge synthesis using OpenWiki CLI running on GitHub Actions to convert Notion notes into Open Knowledge Format (OKF v0.1) Markdown files stored in a private GitHub Vault and indexed into Neon Postgres.
 
-### 1.1 Sensor Layer (`src/sensors/`)
-Responsible for ingesting all input signals (text, audio/voice, URLs) from the Telegram webhook, extracting the raw payload, and decoupling the execution thread.
-- **`telegramWebhook.ts`**: The receiver of the Telegram webhook payload. In production, it instantly delegates payload dispatching and returns HTTP 200 OK.
-- **`eventDispatcher.ts`**: Manages operational decoupling.
-  - If `QUEUE_MODE === 'sync'`: Routes payload directly and synchronously to the Governance layer.
-  - If `QUEUE_MODE === 'cloud_tasks'`: Pushes the payload to GCP Cloud Tasks queue to invoke the `/worker` endpoint.
-- **`voiceProcessor.ts`**: Handles audio/voice inputs (`.ogg` format) from Telegram. Downloads the audio file via Telegram API, passes it to the Gemini API (`inlineData`, `audio/ogg`) to transcribe the text, and strips filler words (e.g., "ờ", "à", "uhm").
-
-#### Debounce Buffer (MOD-07)
-The Sensor Layer includes a serverless debounce buffer (`src/sensors/debounceBuffer.ts`) that batches rapid-fire Telegram messages using Upstash Redis (in-memory list accumulator) and QStash (delayed HTTP callback). Messages within a configurable window (default 4s) are merged into a single AI request. Infrastructure dependencies: `@upstash/redis` (REST-based, serverless-safe), `@upstash/qstash` (delayed message queue with signature verification).
-
-### 1.2 Governance Layer (`src/governance/`)
-Orchestrates request routing using probabilistic intent evaluation.
-- **`intentRouter.ts`**: Uses the Gemini LITE model to evaluate user intent (Add Task, Rescue, Highlight, Weekly Planning) and generates a `confidence_score`.
-  - Confidence $\ge$ 95%: Executes automatically by routing to the appropriate Skill or Tool layer.
-  - Confidence < 95%: Triggers the HITL Manager.
-  - **Decoupled Error Reporting (Global Catch)**: The async core handler `handleWorkerPayload` must be completely wrapped in a global `try-catch` block. If an unhandled exception or API failure occurs post-decoupling, the catch block must explicitly trigger `telegramClient.sendMessage` to deliver a polite, user-facing error notification (Graceful Degradation) directly to the user's chat, rather than failing silently in GCP logs.
-- **`hitlManager.ts`**: Persists low-confidence inputs into Firestore under session state `AWAITING_HITL_CONFIRMATION` and returns an inline keyboard to the user on Telegram to clarify their intent. When they select an option, it processes the callback query (`hitl_confirm:<intent>`), updates state, and continues routing.
-  - **HITL Session Expiration & Cancellation**:
-    1. Always append a final `[❌ Hủy bỏ]` button to the inline keyboard layout, returning a low-byte callback payload: `hitl_cancel`. The sensor layer must catch this to immediately wipe the active Firestore state.
-    2. Firestore state has a timestamp-based TTL (Time-To-Live) verification. When evaluating incoming updates, if an existing state is older than 5 minutes, mark it as expired, clear the session automatically, and treat the new incoming payload as a fresh independent intent request.
-
-### 1.3 Tool Layer (`src/tools/`)
-Contains raw, deterministic client integrations for external APIs. No AI reasoning or routing occurs here. All error handling, retry policies, and API rate-limiting are encapsulated within these modules.
-- **`notionClient.ts`**: Interacts with the Notion database. Handles rate-limiting defensively with strict timeouts and exponential backoff retry logic.
-- **`firestoreClient.ts`**: Manages Firestore reads and writes (user sessions, planning drafts, retro metrics).
-- **`googleClient.ts`**: Integrates Google Calendar for querying busy slots.
-- **`telegramClient.ts`**: Low-level Telegram Bot API wrappers (sendMessage, editMessage, getFile).
-- **`triageLockTool.ts`**: State lock management for Hard Locks (`triage_map`), Soft Locks (`active_triage_session`), and Distributed Locks (`SETNX`).
-
-### 1.4 Skills Layer (`src/skills/`)
-Implements complex, stateful multi-tool workflows.
-- **`taskCaptureSkill.ts`**: Parses natural language task descriptions, queries active projects, handles project/area matching, auto-prefixes tasks based on count, and creates task pages in Notion.
-- **`weeklyPlanningSkill.ts`**: Uses the Gemini PRO model to parse unstructured weekly schedules, merges them with Google Calendar busy slots, creates structured tasks in Notion with checklist and description metadata, and manages Firestore draft states.
-- **`triageSkill.ts`**: Multi-threaded Inbox Routing & Dynamic State Lock for Telegram native replies and Notion Inbox Tray item classification.
-
----
-
-## 2. Notion 3-Tier Database Schema
-
-The system integrates with 5 Notion databases, mapping relationships as follows:
+## 2. 5-Layer Closed-Loop System Architecture
 
 ```
-      +-------------+
-      |    Areas    |<--------------+
-      +------+------+               |
-             |                      |
-             | (1:N)                | (1:N)
-             v                      |
-      +------+------+        +------+------+
-      |   Projects  |        |  Resources  |
-      +------+------+        +-------------+
-             |
-             | (1:N)
-             v
-      +------+------+        +-------------+
-      |    Tasks    |<------>|  Daily Logs |
-      +-------------+ (N:1)  +-------------+
+[ Human Input: Telegram / Notion ]
+               │
+               ▼
+       [ SENSOR LAYER ] ──(Cloudflare Workers Hono Proxy + Durable Objects Debounce)
+               │
+               ▼
+     [ GOVERNANCE LAYER ] ──(Vercel AI SDK Intent Router + HITL DO)
+               │
+      ┌────────┴────────────────────────┐
+      ▼                                 ▼
+[ HOT PATH: Real-Time ]       [ COLD PATH: Nightly Batch ]
+  ├── Staging Notes             ├── OpenWiki CLI Engine
+  ├── Tasks & Dependencies      ├── OKF Markdown Synthesis
+  └── Working Memory Handoff    └── GitHub Vault Storage
+      └────────┬────────────────────────┘
+               ▼
+       [ SKILLS LAYER ] ──(Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff)
+               │
+               ▼
+        [ TOOL LAYER ]  ──(Neon Postgres + Telegram API + GitHub API + Notion API)
 ```
 
-1. **`Areas`** (Lĩnh vực): High-level categories (e.g., Work, Health). Links to Projects and Resources.
-2. **`Projects`** (Dự án): Active initiatives with defined scopes. Links to Areas and Tasks.
-3. **`Tasks`** (Công việc): Actionable steps. Properties: `Name`, `Status` (`Not Started`, `On Hold`, `In Progress`, `Done`, `Archived`), `Priority` (`High`, `Medium`, `Low`), `Estimate` (hours), `Date` (due date/start date), `Project` (Relation), `Daily Log` (Relation).
-4. **`Daily Logs`** (Nhật ký): Daily summaries. Properties: `Name` (`YYYY-MM-DD`), `Date`, `Highlight` (Rich Text), `Tasks` (Relation).
-5. **`Resources`** (Tài nguyên): Saved bookmarks. Properties: `Name`, `URL`, `Area` (Relation).
+## 3. Database Schemas (Neon Postgres)
 
----
+### `notes_staging`
+Stores raw Notion page text for fast real-time search.
+- `id` (UUID, Primary Key)
+- `notion_page_id` (TEXT, Unique)
+- `title` (TEXT)
+- `raw_text` (TEXT)
+- `embedding` (vector(768))
+- `synced_at` (TIMESTAMPTZ)
+- `source` (TEXT)
 
-## 3. Testing & Evaluation Guardrails
+### `knowledge_wiki`
+Stores OKF Markdown entries synthesized by OpenWiki Personal Brain.
+- `id` (UUID, Primary Key)
+- `title` (TEXT)
+- `content` (TEXT)
+- `embedding` (vector(768))
+- `github_path` (TEXT, Unique)
+- `tags` (TEXT[])
+- `synthesized_at` (TIMESTAMPTZ)
 
-- **Sync Mode testing**: Running `tests/localTest.ts` sets `QUEUE_MODE = 'sync'` programmatically. No external GCP Cloud Task queues are needed for local testing.
-- **Evals Suite (`evals/`)**:
-  - `golden-dataset.json`: A ground-truth catalog containing 50-100 conversation samples mapped to their expected intent classification.
-  - `run-evals.ts`: A test runner executing intent routing queries using the live Gemini LITE API, comparing outputs to the ground-truth dataset, and enforcing a strict $\ge 95\%$ accuracy threshold.
-  - **Token Optimization for Evals Suite**: The evaluation suite run-evals.ts is strictly decoupled from the standard `npm test` workflow. It is wired to a dedicated command (`npm run evals`) or established as a Git pre-push hook. It must only run on demand or right before raising a Pull Request.
-- **Rate-Limiting Guardrails**: Notion API requests must incorporate throttle delays (350ms) to avoid HTTP 429 errors during bulk creation operations.
+### `tasks`
+Stores tasks with dependency graph.
+- `id` (UUID, Primary Key)
+- `name` (TEXT)
+- `status` (TEXT: `not_started`, `in_progress`, `done`, `on_hold`, `archived`)
+- `priority` (TEXT: `high`, `medium`, `low`)
+- `estimate_hours` (NUMERIC)
+- `scheduled_date` (DATE)
+- `depends_on` (UUID[])
+- `project_id` (UUID)
+- `notion_page_id` (TEXT)
+- `description` (TEXT)
 
----
+### `working_memory`
+Stores handoff snapshots between work sessions.
+- `id` (UUID, Primary Key)
+- `last_action` (TEXT)
+- `doing` (TEXT)
+- `next_action` (TEXT)
+- `snapshot_at` (TIMESTAMPTZ)
+- `metadata` (JSONB)
 
-## 4. Dynamic Rule Loading Engine
-
-Agent context rules are managed via a vendor-agnostic Dynamic Rule Loading Engine rather than static platform-specific injection.
-
-### Architecture
-- **Rules** (`.agents/rules/`): Pure Markdown files containing domain-specific constraints (API limits, coding standards, Git SOPs).
-- **Manifest** (`.agents/rules-manifest.json`): Single Source of Truth mapping rule IDs to `match_keywords`, `match_paths` (glob patterns), and an `always_on` boolean for global rules.
-- **Rule Engine** (`.agents/scripts/rule-engine.js`): CLI tool that evaluates `--path` and `--keyword` inputs against the manifest and outputs matching rule Markdown to stdout.
-- **Rule Creator** (`.agents/scripts/add-rule.js`): Enforces creation SOP — auto-generates rule file + manifest entry. `--verify` flag audits manifest/filesystem sync.
-
-### Rule Classification
-| Type | `always_on` | Behavior |
-|------|-------------|----------|
-| **Global Governance** | `true` | Always emitted (e.g., `github-workflow`) |
-| **Domain-Specific** | `false` | Emitted only on path/keyword match (e.g., `notion-limits`, `centralized-messages`) |
-
----
-
-## 5. Orchestrator Skill & 4 Harness Gates
-
-The multi-agent execution loop (`.agents/skills/orchestrator/`) enforces 4 production-grade verification gates:
-1. **Dynamic Rule Engine Pre-check**: Invokes `node .agents/scripts/rule-engine.js` to load domain rules before editing code.
-2. **Self-Healing & Git Rollback Protocol**: Runs `scripts/test_runner.js`. If tests fail > 3 times, exports git patch to `.agents/artifacts/failed-ticket-<id>.patch`, executes `git reset --hard HEAD`, and escalates to HITL.
-3. **Documentation Cascade Gate**: Runs `scripts/review_dispatcher.js`. Verifies sync of `docs/spec.md`, `docs/agents/context.md`, `docs/sitemap.md` and enforces 0 errors on `npm run build` before merging.
-4. **Benchmark Ground-Truth Gate**: At Epic completion, executes `npm run evals` ensuring intent accuracy score $\ge 95\%$.
-
-
+### `habits`
+- `id` (UUID, Primary Key)
+- `name` (TEXT)
+- `category` (TEXT)
+- `frequency` (TEXT)
+- `last_logged` (DATE)
+- `streak_days` (INTEGER)

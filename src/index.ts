@@ -1,118 +1,103 @@
-import type { HttpFunction } from '@google-cloud/functions-framework';
-import { dispatch } from './sensors/eventDispatcher';
-import { handleWorkerPayload } from './governance/intentRouter';
-import { ingestMessage, processBuffer, isDebounceEnabled } from './sensors/debounceBuffer';
-import { verifyQStashSignature } from './tools/qstashClient';
-
 /**
- * GCP Cloud Functions HTTP entry point.
- * Matches routes via req.path:
- *   - /worker: Invoked by Cloud Tasks to process decoupled operations. Awaits execution.
- *   - /worker/process-buffer: Invoked by QStash to flush debounce buffer (MOD-07).
- *   - default / webhook: Invoked by Telegram. Dispatches asynchronously and responds 200 OK immediately.
+ * PRJ226 v3.0: Cloudflare Workers Entry Point (Hono)
+ *
+ * Routes:
+ *   POST /webhook          → Telegram update receiver (< 50ms typing ack)
+ *   POST /worker           → Internal queue consumer (AI processing)
+ *   POST /notion-sync      → Notion Fast-Sync webhook (if on Notion Enterprise)
+ *   GET  /health           → Health check
+ *   GET  /scheduled        → Triggered by Cloudflare Cron (notion polling)
  */
-export const helloHttp: HttpFunction = async (req, res) => {
-  const path = req.path || '/';
 
-  if (path === '/worker') {
-    console.log('[Webhook] Received worker task callback.');
-    try {
-      await handleWorkerPayload(req.body);
-    } catch (error) {
-      console.error('[Webhook] Error processing worker task:', error);
-    }
-    // We must send a 200 OK to Cloud Tasks once done
-    res.status(200).send('OK');
-    return;
+import { Hono } from 'hono';
+import type { Env } from './config';
+import { handleTelegramWebhook } from './sensors/telegramWebhook';
+import { handleWorkerPayload } from './governance/intentRouter';
+import { handleNotionSync } from './sensors/notionFastSync';
+import { DebounceBuffer } from './sensors/debounceBuffer';
+import { HitlSession } from './governance/hitlManager';
+import { NeonClient } from './tools/neonClient';
+
+// Re-export Durable Object classes (required by Cloudflare Workers)
+export { DebounceBuffer, HitlSession };
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+
+const app = new Hono<{ Bindings: Env }>();
+
+// ─── Middleware: Bot protection ────────────────────────────────────────────────
+app.use('/webhook', async (c, next) => {
+  const body = await c.req.json().catch(() => null);
+  if (body?.message?.from?.is_bot === true) {
+    console.log('[Webhook] Bot protection: dropped update from bot user.');
+    return c.text('OK', 200);
+  }
+  // Attach parsed body for downstream handlers
+  c.set('body' as never, body);
+  return next();
+});
+
+// ─── Telegram Webhook ─────────────────────────────────────────────────────────
+app.post('/webhook', async (c) => {
+  const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token');
+  if (secret !== c.env.TELEGRAM_WEBHOOK_SECRET) {
+    return c.text('Unauthorized', 401);
   }
 
-  // ─── MOD-07: QStash Debounce Buffer Flush Endpoint ───
-  if (path === '/worker/process-buffer') {
-    console.log('[Webhook] Received QStash process-buffer callback.');
+  const body = await c.req.json();
+  // Fire-and-forget: typing ack + async processing
+  await handleTelegramWebhook(body, c.env);
+  return c.text('OK', 200);
+});
 
-    // ERR-04: Security — verify QStash signature
-    const isValid = await verifyQStashSignature(req as any);
-    if (!isValid) {
-      console.warn('[Webhook] Rejected unauthorized process-buffer request.');
-      res.status(401).send('Unauthorized');
-      return;
-    }
+// ─── Internal Queue Consumer (AI processing) ──────────────────────────────────
+app.post('/worker', async (c) => {
+  const body = await c.req.json();
+  await handleWorkerPayload(body, c.env);
+  return c.text('OK', 200);
+});
 
-    try {
-      const { chatId } = req.body;
-      await processBuffer(chatId);
-    } catch (error) {
-      console.error('[Webhook] Error processing debounce buffer:', error);
-    }
-    res.status(200).send('OK');
-    return;
-  }
+// ─── Notion Fast-Sync Webhook ─────────────────────────────────────────────────
+app.post('/notion-sync', async (c) => {
+  const body = await c.req.json();
+  await handleNotionSync(body, c.env);
+  return c.text('OK', 200);
+});
 
-  // Telegram webhook route
-  console.log('[Webhook] Received Telegram update payload.');
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/health', async (c) => {
+  const neon = new NeonClient(c.env);
+  const dbOk = await neon.ping();
+  return c.json({ status: 'ok', db: dbOk ? 'connected' : 'unreachable', version: '3.0.0' });
+});
 
-  // Bot Webhook Protection (PRD MOD-08 Section 3.2 Yêu cầu 5)
-  if (req.body?.message?.from?.is_bot === true) {
-    console.log('[Webhook] Bot Webhook Protection: Dropped update from bot user.');
-    res.status(200).send('OK');
-    return;
-  }
+// ─── Cloudflare Worker Default Export ────────────────────────────────────────
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return app.fetch(request, env, ctx);
+  },
 
-  try {
-    // Callback queries are button presses — always process directly, never debounce
-    if (req.body?.callback_query) {
-      console.log('[Webhook] Callback query detected. Processing directly via intentRouter...');
-      if (process.env.QUEUE_MODE === 'sync') {
-        await handleWorkerPayload(req.body);
-      } else {
-        dispatch(req.body).catch((err) => {
-          console.error('[Webhook] Failed to dispatch callback query:', err);
-        });
-      }
-      res.status(200).send('OK');
-      return;
-    }
+  /**
+   * Cron Trigger: Notion Fast-Sync polling (runs every 1 minute via wrangler.toml)
+   * Cloudflare Cron minimum interval is 1 minute, not 30 seconds.
+   */
+  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    console.log('[Cron] Notion Fast-Sync triggered.');
+    await handleNotionSync({ type: 'cron' }, env);
+  },
 
-    // Reply Bypass (PRD MOD-07 Section 3.1 Yêu cầu 2 & MOD-08 Section 3.2 Yêu cầu 1)
-    const isReplyMessage = Boolean(req.body?.message?.reply_to_message_id);
-    if (isReplyMessage) {
-      console.log('[Webhook] Debounce Bypass: Reply detected. Processing directly via intentRouter...');
-      await handleWorkerPayload(req.body);
-      res.status(200).send('OK');
-      return;
-    }
-
-    // ─── MOD-07: Debounce Buffer Integration ───
-    const chatId = req.body?.message?.chat?.id;
-    const debounceEnabled = chatId && isDebounceEnabled(chatId);
-
-    if (debounceEnabled) {
-      const result = await ingestMessage(req.body);
-      if (result === 'fallback') {
-        // ERR-05: Redis unavailable → fail-open, dispatch directly
-        console.warn('[Webhook] Redis unavailable. Fail-open: dispatching directly.');
-        if (process.env.QUEUE_MODE === 'sync') {
-          await dispatch(req.body);
-        } else {
-          dispatch(req.body).catch((err) => {
-            console.error('[Webhook] Failed to dispatch payload asynchronously:', err);
-          });
-        }
-      }
-      // 'buffered' → message is in Redis, QStash timer scheduled. No further action.
-    } else {
-      // Debounce disabled → original behavior
-      if (process.env.QUEUE_MODE === 'sync') {
-        await dispatch(req.body);
-      } else {
-        dispatch(req.body).catch((err) => {
-          console.error('[Webhook] Failed to dispatch payload asynchronously:', err);
-        });
+  /**
+   * Cloudflare Queue Consumer: processes debounced payloads
+   */
+  async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      try {
+        await handleWorkerPayload(message.body as Record<string, unknown>, env);
+        message.ack();
+      } catch (err) {
+        console.error('[Queue] Failed to process message:', err);
+        message.retry();
       }
     }
-  } catch (error) {
-    console.error('[Webhook] Error during payload dispatch:', error);
-  }
-
-  res.status(200).send('OK');
+  },
 };

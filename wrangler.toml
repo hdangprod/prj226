@@ -1,0 +1,67 @@
+name = "prj226-liam"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = ""
+
+# ─── Durable Objects ───
+[[durable_objects.bindings]]
+name = "DEBOUNCE_BUFFER"
+class_name = "DebounceBuffer"
+
+[[durable_objects.bindings]]
+name = "HITL_SESSION"
+class_name = "HitlSession"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["DebounceBuffer", "HitlSession"]
+
+# ─── Cloudflare Queues ───
+[[queues.producers]]
+binding = "TASK_QUEUE"
+queue = "prj226-task-queue"
+
+[[queues.consumers]]
+queue = "prj226-task-queue"
+max_batch_size = 1
+max_batch_timeout = 0
+
+# ─── KV Namespaces (kill-switch fallback buffer) ───
+[[kv_namespaces]]
+binding = "FALLBACK_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# ─── Cron Triggers ───
+[triggers]
+crons = ["*/30 * * * *"]  # Notion Fast-Sync: every 30 seconds (Cloudflare Cron minimum is 1 min; use 1 min or Notion webhook)
+
+# ─── Environment Variables (non-secret) ───
+[vars]
+FEATURE_DEBOUNCE_BUFFER = "ON"
+DEBOUNCE_BUFFER_TIME_MS = "4000"
+DEBOUNCE_MAX_BUFFER_SIZE = "15"
+FEATURE_TRIAGE_MODE = "ON"
+LLM_FAST_PROVIDER = "google"
+LLM_FAST_MODEL = "gemini-2.0-flash"
+LLM_PRO_PROVIDER = "google"
+LLM_PRO_MODEL = "gemini-2.5-pro"
+LLM_EMBED_MODEL = "text-embedding-004"
+
+# ─── Secrets (set via wrangler secret put) ───
+# TELEGRAM_BOT_TOKEN
+# TELEGRAM_WEBHOOK_SECRET
+# TELEGRAM_CHAT_ID
+# NOTION_API_KEY
+# NOTION_TASKS_DB_ID
+# NOTION_PROJECTS_DB_ID
+# NOTION_AREAS_DB_ID
+# NOTION_RESOURCES_DB_ID
+# NOTION_DAILY_LOGS_DB_ID
+# DATABASE_URL         (Neon connection string)
+# LLM_FAST_API_KEY     (Gemini / OpenAI / Anthropic key for fast model)
+# LLM_PRO_API_KEY      (Gemini / OpenAI / Anthropic key for pro model)
+# GITHUB_TOKEN         (read GitHub Vault)
+# GITHUB_VAULT_REPO    (owner/repo of the OKF vault)

@@ -1,357 +1,242 @@
-import { sendMessage, editMessageText, answerCallbackQuery, escapeHtml } from '../tools/telegramClient';
-import { classifyIntent } from '../tools/geminiClient';
-import { executeTaskCapture } from '../skills/taskCaptureSkill';
-import { executeWeeklyPlanning, commitWeeklyDraft } from '../skills/weeklyPlanningSkill';
-import { transcribeVoiceNote } from '../sensors/voiceProcessor';
-import { requestHitlConfirmation } from './hitlManager';
-import {
-  saveSession,
-  loadSession,
-  deleteSession,
-} from '../tools/firestoreClient';
-import {
-  fetchActiveProjects,
-  fetchAreas,
-  createProject,
-  createTask,
-  getOrCreateDailyLog,
-} from '../tools/notionClient';
-import { BOT_MESSAGES } from '../constants/messages';
-
-function extractChatId(payload: any): number | string | undefined {
-  if (payload?.message?.chat?.id) {
-    return payload.message.chat.id;
-  }
-  if (payload?.callback_query?.message?.chat?.id) {
-    return payload.callback_query.message.chat.id;
-  }
-  return undefined;
-}
-
-function notionDeepLink(pageId: string): string {
-  return `https://notion.so/${pageId.replace(/-/g, '')}`;
-}
-
-function getTodayStr(): string {
-  // Timezone +08:00
-  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
-  return d.toISOString().slice(0, 10);
-}
-
-function getCurrentIsoTime(): string {
-  const d = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
-  return d.toISOString().replace('Z', '+08:00');
-}
-
 /**
- * Executes a confirmed intent. Used both by auto-routing (high confidence)
- * and HITL confirmation callbacks.
+ * PRJ226 v3.0: Intent Router (Governance Layer)
+ *
+ * Classifies incoming Telegram payloads into 6 skill intents using
+ * the model-agnostic LLMRouter (Vercel AI SDK — provider-agnostic).
+ *
+ * Intents:
+ *   - Daily_Focus      → morning summary, actionable task list
+ *   - Task_Capture     → add new task to backlog
+ *   - Reschedule       → move/postpone task, dependency conflict check
+ *   - Knowledge_Search → RAG query across notes_staging + knowledge_wiki
+ *   - Rescue_Mode      → low-energy quick-win task suggestions
+ *   - Session_Handoff  → end-of-day memory snapshot, next-session prep
+ *
+ * Routing:
+ *   - Confidence ≥ 95% → dispatch to skill
+ *   - Confidence < 95% → HITL clarification keyboard
  */
-async function executeConfirmedIntent(
-  chatId: number | string,
-  text: string,
-  intent: string,
+
+import { z } from 'zod';
+import type { Env } from '../config';
+import { LLMRouter } from '../router/llmRouter';
+import { sendMessage, sendMessageWithKeyboard } from '../tools/telegramClient';
+import { handleDailyFocus } from '../skills/dailyFocusSkill';
+import { handleTaskCapture } from '../skills/taskCaptureSkill';
+import { handleKnowledgeSearch } from '../skills/knowledgeSearchSkill';
+import { handleRescueMode } from '../skills/rescueModeSkill';
+import { handleSessionHandoff } from '../skills/sessionHandoffSkill';
+import { handleReschedule } from '../skills/rescheduleSkill';
+import type { TelegramUpdate } from '../sensors/telegramWebhook';
+
+// ─── Intent Schema ────────────────────────────────────────────────────────────
+
+export const INTENTS = [
+  'Daily_Focus',
+  'Task_Capture',
+  'Reschedule',
+  'Knowledge_Search',
+  'Rescue_Mode',
+  'Session_Handoff',
+] as const;
+
+export type Intent = (typeof INTENTS)[number];
+
+const IntentResponseSchema = z.object({
+  intent: z.enum(INTENTS),
+  confidence: z.number().min(0).max(100),
+  extracted: z.record(z.unknown()).optional(),
+});
+
+type IntentResponse = z.infer<typeof IntentResponseSchema>;
+
+// ─── System Prompt ────────────────────────────────────────────────────────────
+
+const INTENT_SYSTEM_PROMPT = `You are Liam, an AI second brain assistant. Classify the user's message into exactly one intent.
+
+Available intents:
+- Daily_Focus: User wants their daily summary, morning briefing, or list of today's tasks. Examples: "what are my tasks today", "morning brief", "what should I work on"
+- Task_Capture: User wants to add, log, or capture a new task/to-do. Examples: "add task", "remind me to", "create a task for", "note down"
+- Reschedule: User wants to move, delay, or reschedule a task or appointment. Examples: "reschedule", "move tennis to tomorrow", "delay task X", "push back"
+- Knowledge_Search: User is searching for information in their notes or knowledge base. Examples: "what do I know about", "find my notes on", "search for", "what documents do I have"
+- Rescue_Mode: User is tired, low energy, or overwhelmed and needs easy tasks. Examples: "I'm tired", "low energy", "what can I do quickly", "easy wins", "rescue me"
+- Session_Handoff: User wants to close their work session, save state, or prepare for tomorrow. Examples: "end of day", "save my progress", "session handoff", "wrapping up", "handoff to tomorrow"
+
+Return a JSON object with:
+- intent: the classified intent string
+- confidence: number 0-100 (how confident you are)
+- extracted: optional key-value pairs extracted from the message (e.g. taskName, date, searchQuery)`;
+
+// ─── Main Handler ───────────────────────────────────────────────────────────────
+
+export async function handleWorkerPayload(
+  update: Record<string, unknown>,
+  env: Env,
 ): Promise<void> {
-  if (intent === 'Add Task') {
-    await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_TASK);
-    const captureResult = await executeTaskCapture(text, getCurrentIsoTime(), getTodayStr());
+  const chatId =
+    (update.message as { chat?: { id: number } } | undefined)?.chat?.id ??
+    (update.callback_query as { message?: { chat?: { id: number } } } | undefined)?.message?.chat?.id;
 
-    if (captureResult.status === 'success' && captureResult.taskId) {
-      const deepLink = notionDeepLink(captureResult.taskId);
-      await sendMessage(
-        chatId,
-        BOT_MESSAGES.SUCCESS.TASK_CREATED,
-        { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
-      );
-    } else if (captureResult.status === 'needs_project_selection' && captureResult.taskInput) {
-      const activeProjects = await fetchActiveProjects();
-
-      if (activeProjects.length > 0) {
-        await saveSession(chatId, { state: 'AWAITING_PROJECT_SELECTION', taskInput: captureResult.taskInput });
-
-        const keyboard: any[][] = [];
-        for (const proj of activeProjects) {
-          keyboard.push([{ text: `📁 ${proj.name}`, callback_data: `addtask_proj:${proj.id}` }]);
-        }
-        keyboard.push([{ text: '➕ Tạo Project mới', callback_data: 'addtask_newproj' }]);
-
-        await sendMessage(
-          chatId,
-          BOT_MESSAGES.SUCCESS.TASK_ANALYZED(escapeHtml(captureResult.taskInput.name)) + '\n' + BOT_MESSAGES.PROMPTS.CHOOSE_PROJECT,
-          { inline_keyboard: keyboard }
-        );
-      } else {
-        await saveSession(chatId, { state: 'AWAITING_PROJECT_NAME', taskInput: captureResult.taskInput });
-        await sendMessage(
-          chatId,
-          BOT_MESSAGES.SUCCESS.TASK_ANALYZED(escapeHtml(captureResult.taskInput.name)) + '\n' + BOT_MESSAGES.PROMPTS.NO_PROJECT_PROMPT
-        );
-      }
-    }
-  } else if (intent === 'Rescue') {
-    // Stub: Will be implemented in future slices
-    await sendMessage(chatId, '⚡ Tính năng Rescue sẽ được triển khai sớm!');
-  } else if (intent === 'Highlight') {
-    // Stub: Will be implemented in future slices
-    await sendMessage(chatId, '📌 Tính năng Highlight sẽ được triển khai sớm!');
-  } else if (intent === 'Weekly Planning') {
-    await sendMessage(chatId, BOT_MESSAGES.PROMPTS.ANALYZING_WEEKLY_PLAN);
-    try {
-      await executeWeeklyPlanning(chatId, text, getCurrentIsoTime());
-    } catch (error) {
-      console.error('[Worker] Weekly Planning Error:', error);
-      const errMsg = error instanceof Error ? error.message : String(error);
-      await sendMessage(chatId, BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errMsg)));
-    }
-  } else {
-    await sendMessage(chatId, BOT_MESSAGES.ERRORS.UNKNOWN_COMMAND);
-  }
-}
-
-export async function handleWorkerPayload(payload: any): Promise<void> {
-  const chatId = extractChatId(payload);
   if (!chatId) {
-    console.error('[Worker] Chat ID could not be extracted from payload:', JSON.stringify(payload));
+    console.warn('[IntentRouter] No chatId in payload. Dropping.');
     return;
   }
 
-  try {
-    // ─── Case 1: Callback Queries (Inline Button Presses) ───
-    if (payload.callback_query) {
-      const { data, message, id: callbackId } = payload.callback_query;
-      const colonIndex = data.indexOf(':');
-      let action = data;
-      let actionPayload = '';
-      if (colonIndex !== -1) {
-        action = data.substring(0, colonIndex);
-        actionPayload = data.substring(colonIndex + 1);
-      }
-
-      console.log(`[Worker] Processing callback query action: ${action}, payload: ${actionPayload}`);
-
-      if (action === 'addtask_proj') {
-        const session = await loadSession(chatId);
-        if (!session || session.state !== 'AWAITING_PROJECT_SELECTION' || !session.taskInput) {
-          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
-          return;
-        }
-
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.CREATING_TASK_SINGLE);
-        await deleteSession(chatId);
-
-        const dailyLog = await getOrCreateDailyLog(getTodayStr());
-        const taskId = await createTask(session.taskInput, actionPayload, dailyLog.id);
-        const deepLink = notionDeepLink(taskId);
-
-        await editMessageText(
-          chatId,
-          message.message_id,
-          BOT_MESSAGES.SUCCESS.TASK_CREATED,
-          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
-        );
-      } else if (action === 'addtask_newproj') {
-        const session = await loadSession(chatId);
-        if (!session || session.state !== 'AWAITING_PROJECT_SELECTION') {
-          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
-          return;
-        }
-
-        await answerCallbackQuery(callbackId);
-        session.state = 'AWAITING_PROJECT_NAME';
-        await saveSession(chatId, session);
-
-        await editMessageText(
-          chatId,
-          message.message_id,
-          BOT_MESSAGES.PROMPTS.ENTER_PROJECT_NAME
-        );
-      } else if (action === 'addtask_area') {
-        const session = await loadSession(chatId);
-        if (!session || session.state !== 'AWAITING_AREA_SELECTION' || !session.pendingProjectName || !session.taskInput) {
-          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
-          return;
-        }
-
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.PROMPTS.PROJECT_INIT);
-        const areas = await fetchAreas();
-        const selectedArea = areas.find(a => a.id === actionPayload);
-        const areaName = selectedArea ? selectedArea.name : 'Unknown';
-
-        const newProj = await createProject(session.pendingProjectName, actionPayload);
-        session.taskInput.projectName = newProj.name;
-
-        const dailyLog = await getOrCreateDailyLog(getTodayStr());
-        const taskId = await createTask(session.taskInput, newProj.id, dailyLog.id);
-        const deepLink = notionDeepLink(taskId);
-
-        await deleteSession(chatId);
-
-        try {
-          await editMessageText(chatId, message.message_id, BOT_MESSAGES.PROMPTS.CHOOSE_AREA(escapeHtml(newProj.name)));
-        } catch (e) {
-          console.error('[Worker] Failed to remove inline keyboard:', e);
-        }
-
-        await sendMessage(
-          chatId,
-          BOT_MESSAGES.SUCCESS.TASK_CREATED_FULL(escapeHtml(newProj.name), escapeHtml(areaName)),
-          { inline_keyboard: [[{ text: BOT_MESSAGES.BUTTONS.OPEN_IN_NOTION, url: deepLink }]] }
-        );
-      } else if (action === 'hitl_confirm') {
-        // HITL Confirmation: User selected an intent from the clarification keyboard
-        const confirmedIntent = actionPayload;
-        const session = await loadSession(chatId);
-        if (!session || session.state !== 'AWAITING_HITL_CONFIRMATION' || !session.originalText) {
-          await answerCallbackQuery(callbackId, BOT_MESSAGES.ERRORS.SESSION_EXPIRED);
-          return;
-        }
-
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.PROCESSING);
-        await deleteSession(chatId);
-
-        // Re-route the original text through the confirmed intent
-        console.log(`[Worker] HITL confirmed intent: ${confirmedIntent} for text: "${session.originalText}"`);
-        await editMessageText(chatId, message.message_id, `✅ Đã xác nhận: <b>${confirmedIntent}</b>`);
-        await executeConfirmedIntent(chatId, session.originalText, confirmedIntent);
-      } else if (action === 'hitl_cancel') {
-        // HITL Cancel: User wants to discard the pending input
-        await answerCallbackQuery(callbackId);
-        await deleteSession(chatId);
-        await editMessageText(chatId, message.message_id, BOT_MESSAGES.BUTTONS.CANCELLED);
-        console.log(`[Worker] HITL session cancelled by user.`);
-      } else if (action === 'weekly_approve') {
-        const draftId = actionPayload;
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.PROCESSING);
-        
-        try {
-          const count = await commitWeeklyDraft(chatId, draftId);
-          await editMessageText(chatId, message.message_id, `✅ <b>Đã đồng bộ thành công ${count} tasks vào Notion!</b>`);
-        } catch (error) {
-          console.error('[Worker] Error committing weekly draft:', error);
-          const errMsg = error instanceof Error ? error.message : String(error);
-          await sendMessage(chatId, BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errMsg)));
-        }
-      } else if (action === 'weekly_cancel') {
-        const draftId = actionPayload;
-        await answerCallbackQuery(callbackId, BOT_MESSAGES.BUTTONS.CANCELLED);
-        try {
-          const { deleteDraft } = await import('../tools/firestoreClient');
-          await deleteDraft(draftId);
-        } catch (e) {
-          console.error('[Worker] Failed to delete draft on cancel:', e);
-        }
-        await editMessageText(chatId, message.message_id, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
-      }
-      return;
-    }
-
-    // ─── Case 2: Text or Voice Messages ───
-    let text = payload?.message?.text?.trim() || '';
-
-    // Voice Note Detection: transcribe audio if present and no text
-    if (!text && payload?.message?.voice) {
-      const fileId = payload.message.voice.file_id;
-      console.log(`[Worker] Voice note detected. file_id: ${fileId}`);
-      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.LISTENING_VOICE);
-      text = await transcribeVoiceNote(fileId);
-      console.log(`[Worker] Transcribed voice text: "${text}"`);
-      await sendMessage(chatId, BOT_MESSAGES.PROMPTS.VOICE_TRANSCRIBED(escapeHtml(text)));
-    }
-
-    if (!text) return;
-
-    // ─── Triage Skill Interceptor (MOD-08) ───
-    const { triageLockTool } = await import('../tools/triageLockTool');
-    const { handleTriageInput, flushInbox } = await import('../skills/triageSkill');
-
-    // Hard Override / Escape Hatch (PRD MOD-08 Section 3.2 Yêu cầu 4 & AC 4.2)
-    if (text.startsWith('/')) {
-      triageLockTool.deleteSoftLock(chatId);
-      if (text.startsWith('/triage')) {
-        await flushInbox(chatId);
-        return;
-      }
-    }
-
-    // Check Triage Soft Lock & Native Reply routing (PRD MOD-08 Section 3.2 Yêu cầu 4)
-    const replyToMessageId = payload?.message?.reply_to_message_id;
-    const activeTriagePageId = triageLockTool.getSoftLock(chatId) || (replyToMessageId ? triageLockTool.getHardLock(chatId, replyToMessageId) : null);
-
-    if (activeTriagePageId && !text.startsWith('/')) {
-      console.log(`[Worker] Triage Interceptor: Active triage soft lock found for chatId ${chatId}, pageId: ${activeTriagePageId}`);
-      await handleTriageInput(chatId, text, replyToMessageId, activeTriagePageId);
-      return;
-    }
-
-    // A. Check active session state first
-    const session = await loadSession(chatId);
-    if (session) {
-      if (session.state === 'AWAITING_PROJECT_NAME') {
-        if (text.startsWith('/')) {
-          await deleteSession(chatId);
-          await sendMessage(chatId, BOT_MESSAGES.ERRORS.PLAN_CANCELLED_NEW_COMMAND);
-        } else {
-          const projectName = text;
-          const areas = await fetchAreas();
-
-          session.state = 'AWAITING_AREA_SELECTION';
-          session.pendingProjectName = projectName;
-          await saveSession(chatId, session);
-
-          const keyboard: any[][] = [];
-          for (const area of areas) {
-            keyboard.push([{ text: `🏷 ${area.name}`, callback_data: `addtask_area:${area.id}` }]);
-          }
-
-          await sendMessage(
-            chatId,
-            BOT_MESSAGES.PROMPTS.CHOOSE_AREA(escapeHtml(projectName)),
-            { inline_keyboard: keyboard }
-          );
-        }
-        return;
-      }
-    }
-
-    // B. Default Router Logic (No active session)
-    if (text.startsWith('/start')) {
-      await sendMessage(chatId, BOT_MESSAGES.GREETINGS.WELCOME);
-      return;
-    }
-
-    // Classify intent using Gemini LITE
-    const classification = await classifyIntent(text);
-    console.log(`[Worker] Intent Classification: ${JSON.stringify(classification)}`);
-
-    // ─── Probabilistic Routing ───
-    if (classification.confidence_score >= 95 && classification.intent !== 'Unknown') {
-      // HIGH CONFIDENCE: Auto-execute the classified intent
-      await executeConfirmedIntent(chatId, text, classification.intent);
-    } else if (classification.intent !== 'Unknown' && classification.confidence_score > 0) {
-      // LOW CONFIDENCE: Trigger HITL clarification loop
-      console.log(`[Worker] Low confidence (${classification.confidence_score}%). Triggering HITL flow.`);
-      await requestHitlConfirmation(
-        chatId,
-        text,
-        classification.intent,
-        classification.confidence_score,
-        classification.reasoning,
-      );
-    } else {
-      // UNKNOWN: No recognizable intent
-      await sendMessage(chatId, BOT_MESSAGES.ERRORS.UNKNOWN_COMMAND);
-    }
-
-  } catch (error) {
-    console.error('[Worker] Global Catch - Unhandled error:', error);
-    try {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      await sendMessage(
-        chatId,
-        BOT_MESSAGES.ERRORS.SOMETHING_WENT_WRONG(escapeHtml(errorMsg))
-      );
-    } catch (tgError) {
-      console.error('[Worker] Global Catch - Failed to send Telegram error message:', tgError);
-    }
+  // Handle callback_query (button presses) separately
+  if (update.callback_query) {
+    await handleCallbackQuery(update.callback_query as Record<string, unknown>, chatId, env);
+    return;
   }
+
+  const userText = (update.message as { text?: string } | undefined)?.text ?? '';
+  if (!userText.trim()) {
+    console.log('[IntentRouter] Empty text payload. Ignoring.');
+    return;
+  }
+
+  // Classify intent
+  const llm = new LLMRouter(env);
+  let classification: IntentResponse;
+
+  try {
+    classification = await llm.callFastStructured<IntentResponse>(
+      `User message: "${userText}"`,
+      IntentResponseSchema,
+      INTENT_SYSTEM_PROMPT,
+    );
+  } catch (err) {
+    console.error('[IntentRouter] Classification failed:', err);
+    await sendMessage(chatId, '⚠️ Liam is having trouble understanding that. Please try again.', env);
+    return;
+  }
+
+  console.log(
+    `[IntentRouter] Intent: ${classification.intent}, Confidence: ${classification.confidence}%`,
+  );
+
+  // HITL: confidence < 95% → ask for clarification
+  if (classification.confidence < 95) {
+    await sendHITLClarification(chatId, userText, classification, env);
+    return;
+  }
+
+  // Dispatch to skill
+  await dispatchToSkill(classification, chatId, userText, update as unknown as TelegramUpdate, env);
+}
+
+// ─── Skill Dispatcher ───────────────────────────────────────────────────────────
+
+async function dispatchToSkill(
+  classification: IntentResponse,
+  chatId: number,
+  userText: string,
+  update: TelegramUpdate,
+  env: Env,
+): Promise<void> {
+  const ctx = { chatId, userText, extracted: classification.extracted ?? {}, env, update };
+
+  try {
+    switch (classification.intent) {
+      case 'Daily_Focus':
+        await handleDailyFocus(ctx);
+        break;
+      case 'Task_Capture':
+        await handleTaskCapture(ctx);
+        break;
+      case 'Reschedule':
+        await handleReschedule(ctx);
+        break;
+      case 'Knowledge_Search':
+        await handleKnowledgeSearch(ctx);
+        break;
+      case 'Rescue_Mode':
+        await handleRescueMode(ctx);
+        break;
+      case 'Session_Handoff':
+        await handleSessionHandoff(ctx);
+        break;
+      default:
+        await sendMessage(chatId, "❓ I wasn't sure how to handle that. Could you rephrase?", env);
+    }
+  } catch (err) {
+    console.error(`[IntentRouter] Skill execution error (${classification.intent}):`, err);
+    await sendMessage(
+      chatId,
+      '⚠️ System busy, please retry in a moment.',
+      env,
+    );
+  }
+}
+
+// ─── HITL Clarification ──────────────────────────────────────────────────────────
+
+async function sendHITLClarification(
+  chatId: number,
+  userText: string,
+  classification: IntentResponse,
+  env: Env,
+): Promise<void> {
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '🌅 Daily Focus', callback_data: 'intent:Daily_Focus' },
+        { text: '➕ Capture Task', callback_data: 'intent:Task_Capture' },
+      ],
+      [
+        { text: '🔄 Reschedule', callback_data: 'intent:Reschedule' },
+        { text: '🔍 Search Notes', callback_data: 'intent:Knowledge_Search' },
+      ],
+      [
+        { text: '💤 Rescue Mode', callback_data: 'intent:Rescue_Mode' },
+        { text: '🌙 End Session', callback_data: 'intent:Session_Handoff' },
+      ],
+    ],
+  };
+
+  await sendMessageWithKeyboard(
+    chatId,
+    `🤔 I'm not sure what you mean by:\n<i>"${escapeHtml(userText)}"</i>\n\nWhat would you like to do?`,
+    keyboard,
+    env,
+  );
+}
+
+// ─── Callback Query Handler ───────────────────────────────────────────────────────
+
+async function handleCallbackQuery(
+  callbackQuery: Record<string, unknown>,
+  chatId: number,
+  env: Env,
+): Promise<void> {
+  const data = callbackQuery.data as string | undefined;
+  if (!data) return;
+
+  // HITL intent selection: 'intent:Daily_Focus', etc.
+  if (data.startsWith('intent:')) {
+    const intent = data.replace('intent:', '') as Intent;
+    if (!INTENTS.includes(intent)) return;
+
+    await dispatchToSkill(
+      { intent, confidence: 100, extracted: {} },
+      chatId,
+      '',
+      {} as unknown as TelegramUpdate,
+      env,
+    );
+  }
+}
+
+// ─── Utils ──────────────────────────────────────────────────────────────────────────
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Shared skill context type */
+export interface SkillContext {
+  chatId: number;
+  userText: string;
+  extracted: Record<string, unknown>;
+  env: Env;
+  update: TelegramUpdate;
 }
