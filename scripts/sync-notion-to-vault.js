@@ -1,12 +1,6 @@
 #!/usr/bin/env node
 /**
- * PRJ226 v3.0: Notion → OKF Vault Synthesis Script
- *
- * Queries Notion API using NOTION_TOKEN to fetch accessible pages.
- * Converts Notion blocks/pages into OKF v0.1 Markdown files stored in ./vault.
- *
- * Run: node scripts/sync-notion-to-vault.js
- * Env: NOTION_TOKEN, VAULT_DIR (default: ./vault)
+ * PRJ226 v3.0: Notion Resources → OKF Vault Synthesis Script
  */
 
 const fs = require('fs');
@@ -14,6 +8,9 @@ const path = require('path');
 
 const NOTION_TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const VAULT_DIR = process.env.VAULT_DIR || './vault';
+
+// 📌 Resources Database ID (from .env)
+const RESOURCES_DB_ID = process.env.NOTION_RESOURCES_DB_ID || '3832a737c87d80a08177c6285594dbcf';
 
 if (!NOTION_TOKEN) {
   console.error('❌ NOTION_TOKEN or NOTION_API_KEY environment variable is required');
@@ -26,18 +23,15 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-async function fetchNotionPages() {
-  const response = await fetch('https://api.notion.com/v1/search', {
+async function fetchResourcesPages() {
+  const response = await fetch(`https://api.notion.com/v1/databases/${RESOURCES_DB_ID}/query`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      filter: { value: 'page', property: 'object' },
-      page_size: 100,
-    }),
+    body: JSON.stringify({ page_size: 100 }),
   });
 
   if (!response.ok) {
-    throw new Error(`Notion search API error ${response.status}: ${await response.text()}`);
+    throw new Error(`Notion database query error ${response.status}: ${await response.text()}`);
   }
 
   const data = await response.json();
@@ -49,9 +43,7 @@ async function fetchPageContent(pageId) {
     headers,
   });
 
-  if (!response.ok) {
-    return '';
-  }
+  if (!response.ok) return '';
 
   const data = await response.json();
   const textLines = [];
@@ -70,13 +62,13 @@ async function fetchPageContent(pageId) {
 }
 
 async function main() {
-  console.log('🧠 Starting Notion to OKF Vault synthesis...');
+  console.log('🧠 Starting Notion Resources to OKF Vault synthesis...');
 
   if (!fs.existsSync(VAULT_DIR)) {
     fs.mkdirSync(VAULT_DIR, { recursive: true });
   }
 
-  const pages = await fetchNotionPages();
+  const pages = await fetchResourcesPages();
   let synthesizedCount = 0;
 
   for (const page of pages) {
@@ -85,15 +77,15 @@ async function main() {
       page.properties?.title?.title?.[0]?.plain_text ||
       '';
 
-    if (!title || title.includes('Database PRJ226')) continue;
+    if (!title) continue;
 
     const content = await fetchPageContent(page.id);
     const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '-').trim();
 
     const okfMarkdown = `---
 title: "${title}"
-tags: [notion-sync, second-brain]
-category: "Notion Knowledge Base"
+tags: [resources, second-brain]
+category: "Notion Resources"
 synthesized_at: "${new Date().toISOString()}"
 ---
 
