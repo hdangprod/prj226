@@ -1,73 +1,62 @@
-import { sendMessage } from '../tools/telegramClient';
-import { saveSession } from '../tools/firestoreClient';
-import type { InlineKeyboardMarkup } from '../tools/telegramClient';
-import { BOT_MESSAGES } from '../constants/messages';
-
 /**
- * Known intents that can be presented as HITL confirmation options.
+ * PRJ226 v3.0: HITL Manager (Cloudflare KV Backed — 100% Free Tier)
+ *
+ * Manages Human-In-The-Loop session state for multi-turn interactions.
+ * Replaces: Durable Objects & Firestore
+ * Uses: Cloudflare KV (SESSION_KV binding) with 300s expiration TTL
  */
-const HITL_INTENT_OPTIONS = [
-  { label: '📝 Thêm Task', intent: 'Add Task' },
-  { label: '⚡ Cứu vãn tập trung', intent: 'Rescue' },
-  { label: '📌 Ghi nhận thành tựu', intent: 'Highlight' },
-  { label: '📅 Lập kế hoạch tuần', intent: 'Weekly Planning' },
-] as const;
 
-/**
- * HITL Manager: Handles low-confidence intent routing.
- *
- * When the Gemini LITE classifier returns a confidence_score < 95%,
- * this manager:
- *   1. Persists the pending input into Firestore under state `AWAITING_HITL_CONFIRMATION`
- *   2. Presents an inline keyboard to the user with all known intents
- *   3. Appends a `[❌ Hủy bỏ]` button with callback `hitl_cancel` for session cleanup
- *
- * The user's selection is handled back in `intentRouter.ts` via the
- * `hitl_confirm:<intent>` callback data pattern.
- *
- * @param chatId - Telegram chat ID
- * @param originalText - The original user message that triggered low confidence
- * @param classifiedIntent - The best-guess intent from Gemini
- * @param confidenceScore - The confidence score returned by Gemini
- * @param reasoning - Gemini's reasoning for the classification
- */
-export async function requestHitlConfirmation(
-  chatId: number | string,
-  originalText: string,
-  classifiedIntent: string,
-  confidenceScore: number,
-  reasoning: string,
-): Promise<void> {
-  // Persist state to Firestore for session continuity
-  await saveSession(chatId, {
-    state: 'AWAITING_HITL_CONFIRMATION',
-    originalText,
-    classifiedIntent,
-    confidenceScore,
-    reasoning,
-  });
+import type { Env } from '../config';
+import type { Intent } from './intentRouter';
 
-  // Build the inline keyboard with all intent options + cancel button
-  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+export interface HITLState {
+  pendingIntent: Intent;
+  pendingPayload: Record<string, unknown>;
+  userText: string;
+  expiresAt: number;
+}
 
-  for (const option of HITL_INTENT_OPTIONS) {
-    // Highlight the AI's best guess with a ✨ marker
-    const isGuess = option.intent === classifiedIntent;
-    const label = isGuess ? `${option.label} ✨` : option.label;
-    keyboard.push([{ text: label, callback_data: `hitl_confirm:${option.intent}` }]);
+export class HITLManager {
+  private env: Env;
+
+  constructor(env: Env) {
+    this.env = env;
   }
 
-  // Always append the cancel button as the final row (per AGENTS.md requirement)
-  keyboard.push([{ text: '❌ Hủy bỏ', callback_data: 'hitl_cancel' }]);
+  private getKey(chatId: number): string {
+    return `hitl:${chatId}`;
+  }
 
-  const replyMarkup: InlineKeyboardMarkup = { inline_keyboard: keyboard };
+  async saveSession(chatId: number, state: Omit<HITLState, 'expiresAt'>): Promise<void> {
+    const key = this.getKey(chatId);
+    const sessionData: HITLState = {
+      ...state,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    };
+    await this.env.SESSION_KV.put(key, JSON.stringify(sessionData), {
+      expirationTtl: 300, // 5 minutes TTL in KV
+    });
+  }
 
-  // Build clarification message
-  const message =
-    `🤔 Liam chưa chắc chắn ý định của Sếp (${confidenceScore}% confidence).\n\n` +
-    `<b>Tin nhắn:</b> <i>"${originalText}"</i>\n` +
-    `<b>Dự đoán:</b> ${classifiedIntent} — ${reasoning}\n\n` +
-    `Sếp muốn thực hiện hành động nào?`;
+  async getSession(chatId: number): Promise<HITLState | null> {
+    const key = this.getKey(chatId);
+    const raw = await this.env.SESSION_KV.get(key);
+    if (!raw) return null;
 
-  await sendMessage(chatId, message, replyMarkup);
+    try {
+      const session = JSON.parse(raw) as HITLState;
+      if (Date.now() > session.expiresAt) {
+        await this.clearSession(chatId);
+        return null;
+      }
+      return session;
+    } catch {
+      return null;
+    }
+  }
+
+  async clearSession(chatId: number): Promise<void> {
+    const key = this.getKey(chatId);
+    await this.env.SESSION_KV.delete(key);
+  }
 }

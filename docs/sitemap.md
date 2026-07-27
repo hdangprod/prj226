@@ -15,13 +15,11 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | AIOS Layer | Target Reference File | Token Policy | Scope / Intent |
 | :--- | :--- | :--- | :--- |
 | **Layer 1: Identity & Rules** | `@AGENTS.md`<br>`@.agents/rules/github-workflow.md` | `Always On` | System identity, positive MUST-FOLLOW rules, negative NEVER-DO restrictions, Git/PR SOP. |
-| **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 4-Layer system & DB schemas. |
-| **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, 3-step GCP Cloud Run pre-deploy checklist. |
-| **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, self-healing runner, task capture & weekly planning skills. |
-| **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@.agents/rules-manifest.json`<br>`@.agents/scripts/rule-engine.js` | `On-Demand` | Dynamic rule engine, deterministic Notion, Firestore, Google & Telegram clients. |
-| **Dynamic Rules Guide** | `@docs/DYNAMIC_RULES_GUIDE.md` | `On-Demand` | Rule engine SOP, platform migration manual, manifest schema. |
+| **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 5-Layer system & DB schemas. |
+| **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, Cloudflare Workers pre-deploy checklist. |
+| **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, 6 PRD skill intents (Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff). |
+| **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@src/router/llmRouter.ts`<br>`@.agents/rules-manifest.json` | `On-Demand` | Dynamic rule engine, provider-agnostic LLMRouter, Neon DB client, Telegram client, GitHub client. |
 | **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`) and detailed solution report (`solution_report.md`). |
-| **Artifact Hub (History)** | `@docs/artifacts/PROJECT_JOURNEY.md` | `Human Request Only` | Living project timeline and key architecture milestone log. |
 
 ---
 
@@ -30,54 +28,57 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 ```
 .
 ├── AGENTS.md                          # [AIOS Layer 1] System identity & core directives
+├── wrangler.toml                      # Cloudflare Worker configuration (Durable Objects, Queues, KV, Crons)
 ├── .agents/
 │   ├── rules/
 │   │   ├── github-workflow.md         # [AIOS Layer 1 - Always On] Git, branching, commit & PR rules
-│   │   ├── notion-limits.md           # [AIOS Layer 5 - On-Demand] Notion API rate limits & throttling
 │   │   └── centralized-messages.md    # [AIOS Layer 5 - On-Demand] UI/Bot text message constants
 │   ├── rules-manifest.json            # [SSOT] Dynamic rule mapping manifest
 │   ├── scripts/
-│   │   ├── rule-engine.js             # [Core Engine] CLI rule resolver (--path, --keyword)
-│   │   └── add-rule.js                # [SOP Enforcer] Automated rule creator & manifest auditor
-│   ├── adapters/
-│   │   └── README.md                  # Platform migration instructions
-│   ├── workflows/
-│   │   ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
-│   │   └── deploy-check.md            # [AIOS Layer 3 - On-Demand] GCP Cloud Run deployment verification checklist
-│   └── skills/
-│       └── orchestrator/              # [AIOS Layer 4 - On-Demand] Multi-agent execution loop & 4 Harness Gates
+│   │   └── rule-engine.js             # [Core Engine] CLI rule resolver
+│   └── workflows/
+│       ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
+│       └── deploy-check.md            # [AIOS Layer 3 - On-Demand] Cloudflare Workers pre-deploy checklist
 ├── docs/
 │   ├── sitemap.md                     # [AIOS Layer 2] Master AI & System sitemap
 │   ├── index.md                       # [AIOS Layer 2] Master knowledge base index
-│   ├── spec.md                        # [AIOS Layer 2] Complete technical specification (v2.0.0)
-│   ├── notion_database_setup.md       # [AIOS Layer 2] Notion DB 5-Tier setup instructions
-│   ├── DYNAMIC_RULES_GUIDE.md         # [On-Demand] Rule engine SOP & platform migration manual
+│   ├── spec.md                        # [AIOS Layer 2] Complete technical specification (v3.0.0)
 │   ├── agents/
-│   │   └── context.md                 # [AIOS Layer 2] 4-Layer architecture & DB schema reference
-│   ├── plans/                         # [Issue Plans & Solutions Archive]
-│   │   ├── issue-16/                  # Rollover / Defer Task Logic (plan.md, solution_report.md)
-│   │   ├── issue-18/                  # Support Time in Task Dates (plan.md, solution_report.md)
-│   │   ├── issue-21/                  # View Task Telegram UI Refactoring (plan.md, solution_report.md)
-│   │   ├── issue-23/                  # Conversational Weekly Scheduler V2 (plan.md, solution_report.md)
-│   │   ├── issue-25/                  # Weekly Scheduler Output Enhancements (plan.md, solution_report.md)
-│   │   ├── issue-27/                  # Fix Scheduler Overlap Logic (plan.md, solution_report.md)
-│   │   ├── issue-29/                  # Hybrid Model Routing (LITE vs PRO) (plan.md, solution_report.md)
-│   │   ├── issue-31/                  # Fix Temporal Slot Overlaps (plan.md, solution_report.md)
-│   │   ├── issue-33/                  # Rebuild into 4-Layer Closed-Loop System (plan.md, solution_report.md)
-│   │   ├── issue-37/                  # AIOS 5-Layer Alignment (plan.md, solution_report.md)
-│   │   ├── issue-40/                  # Dynamic Rule Loading Engine (plan.md, solution_report.md)
-│   │   ├── issue-44/                  # MOD-08 Triage Skill (plan.md, solution_report.md)
-│   │   └── issue-48/                  # MOD-07 Serverless Debounce Buffer (solution_report.md)
-│   └── artifacts/                     # [Human Reviewer Hub - SKIP FOR CODING TASKS]
-│       └── PROJECT_JOURNEY.md         # Living project timeline & engineering log
+│   │   └── context.md                 # [AIOS Layer 2] Architecture & Neon DB schema reference
+│   └── plans/                         # [Issue Plans & Solutions Archive]
+│       └── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite (plan.md, solution_report.md)
+├── evals/                             # 22 Golden Commands dataset & eval runner
+│   ├── golden-dataset.json
+│   └── run-evals.ts
 ├── tests/
-│   ├── localTest.ts                   # Integration test harness
-│   ├── triageSkill.test.ts            # MOD-08 Triage Skill integration tests
-│   └── debounceBuffer.test.ts         # MOD-07 Debounce Buffer integration tests
+│   └── localTest.ts                   # v3.0 Offline integration test harness
+├── scripts/
+│   └── index-vault-to-neon.js         # OKF Vault → Neon pgvector indexer script
 └── src/                               # TypeScript application source code
-    ├── sensors/debounceBuffer.ts       # MOD-07 Serverless Debounce Buffer (ingestion + execution)
-    ├── tools/redisClient.ts           # Upstash Redis client wrapper (atomic RPUSH + TTL)
-    ├── tools/qstashClient.ts          # Upstash QStash delayed message queue client
-    ├── tools/triageLockTool.ts        # Hard/Soft & Distributed Lock Manager
-    └── skills/triageSkill.ts          # Multi-threaded Inbox Triage Skill
+    ├── index.ts                       # Hono entrypoint & routing initialization
+    ├── config.ts                      # Cloudflare Workers environment bindings & type contracts
+    ├── router/
+    │   └── llmRouter.ts               # Provider-agnostic LLM router (Vercel AI SDK)
+    ├── db/
+    │   ├── schema.sql                 # Neon 5-table relational + pgvector schema
+    │   └── procedures.sql             # Atomic RPC stored procedures
+    ├── sensors/
+    │   ├── telegramWebhook.ts         # Telegram webhook receiver (< 50ms typing ack)
+    │   ├── debounceBuffer.ts          # Durable Object sliding window debounce buffer
+    │   └── notionFastSync.ts          # Cloudflare Cron polling sensor
+    ├── governance/
+    │   ├── intentRouter.ts            # LLM intent classifier (6 intents)
+    │   └── hitlManager.ts             # Durable Object HITL session manager
+    ├── tools/
+    │   ├── neonClient.ts              # Neon serverless HTTP driver client
+    │   ├── telegramClient.ts          # Telegram Bot API client (fetch-native)
+    │   ├── notionClient.ts            # Notion REST API client (read-only)
+    │   └── githubClient.ts            # GitHub REST API client (vault reader)
+    └── skills/                        # 6 PRD skill handlers
+        ├── dailyFocusSkill.ts
+        ├── taskCaptureSkill.ts
+        ├── rescheduleSkill.ts
+        ├── knowledgeSearchSkill.ts
+        ├── rescueModeSkill.ts
+        └── sessionHandoffSkill.ts
 ```

@@ -1,158 +1,89 @@
 ---
-title: "Spec: Telegram Bot Notion Second Brain Orchestrator"
-version: 2.0.0
-date: 2026-07-23
+title: "Spec: PRJ226 v3.0 AI-Native Second Brain Architecture & Dual-Speed Personal Assistant (Liam)"
+version: 3.0.0
+date: 2026-07-27
 type: specification
 ---
 
-# Spec: Telegram Bot Notion Second Brain Orchestrator
+# Spec: PRJ226 v3.0 AI-Native Second Brain Architecture & Dual-Speed Personal Assistant (Liam)
 
 ## Objective
-Create a serverless Telegram Bot written in TypeScript, integrated with the Gemini API to manage a 5-database Notion Second Brain system (based on PARA methodology: Tasks, Projects, Areas, Resources, Daily Logs). The bot acts as a conversational productivity assistant built upon a 4-Layer Closed-Loop System that processes text, URLs, and voice notes seamlessly.
+Serverless conversational productivity assistant built with TypeScript (v5.3.3) for Cloudflare Workers and Neon Serverless Postgres (`pgvector`). Orchestrates a Notion Second Brain and OpenWiki Personal Knowledge Vault using a model-agnostic LLM router (Vercel AI SDK).
 
 ## Tech Stack
 - **Language**: TypeScript (v5.3.3)
-- **Runtime**: Node.js (v20+)
-- **Execution Environment**: GCP Functions Framework (v3.5.1) on Cloud Run / Cloud Functions
-- **Notion SDK**: `@notionhq/client` (v2.2.15)
-- **Generative AI SDK**: `@google/generative-ai` (v0.21.0) with dynamic dual-model routing
-- **State Management**: `@google-cloud/firestore` (Native Mode serverless persistence)
-- **Integrations**: `googleapis` (v173.0.0) for Google Calendar busy slot lookups
+- **Runtime**: Cloudflare Workers (Hono framework v4.7.0 — 100% Free Tier)
+- **Database**: Neon Serverless Postgres (`pgvector` cosine similarity search)
+- **Queuing & Session**: Cloudflare KV (`SESSION_KV`, `FALLBACK_KV`) + `ctx.waitUntil()` async execution (0$ cost)
+- **LLM Layer**: Vercel AI SDK (`ai` package) with dynamic env-driven model routing (`google`, `openai`, `anthropic`)
+- **Cold Path**: OpenWiki Personal Brain (GitHub Actions every 6 hours with SHA-256 content hash idempotency)
 
-## Database Schema (Notion)
-The system connects to 5 core Notion databases:
-- **Tasks**: `Name` (Title), `Status` (Select: `Not Started`, `On Hold`, `In Progress`, `Done`, `Archived`), `Priority` (Select: High, Medium, Low), `Estimate` (Number), `Date` (Date), `Project` (Relation), `Daily Log` (Relation).
-- **Projects**: `Name` (Title), `Status` (Select), `Area` (Relation), `Tasks` (Relation).
-- **Daily Logs**: `Name` (Title: YYYY-MM-DD), `Date` (Date), `Highlight` (Rich Text), `Tasks` (Relation).
-- **Areas**: `Name` (Title), `Projects` (Relation), `Resources` (Relation).
-- **Resources**: `Name` (Title), `URL` (URL), `Area` (Relation).
+## Database Schema (Neon Postgres)
+- **`notes_staging`**: Fast-sync raw Notion notes with 768-dim vector embeddings.
+- **`knowledge_wiki`**: OKF Markdown entries synthesized by OpenWiki Personal Brain.
+- **`tasks`**: Project tasks with dependency graph (`depends_on` UUID arrays), scheduled dates, and priorities.
+- **`working_memory`**: Handoff context state (`last_action`, `doing`, `next_action`, `metadata`).
+- **`habits`**: Habit tracking log.
 
 ## Architecture: 4-Layer Closed-Loop System
 
 ```
-                           +--------------------------+
-                           |     Telegram Webhook     |
-                           +------------+-------------+
-                                        |
-                                        v
-                            [Sensor Layer: Webhook]
-                                        |
-                                        v (dispatch: sync / cloud_tasks)
-                          [Governance: Intent Router] <---> [Firestore (HITL state)]
-                                        |
-                 +----------------------+----------------------+
-                 |                      |                      |
-                 v (Confidence >= 95%)  v (Confidence < 95%)   v
-          [Skills Layer]          [HITL Manager]       [Tool Layer]
-        - taskCaptureSkill      - inline keyboard      - NotionClient
-        - weeklyPlanningSkill                          - FirestoreClient
-                                                       - GoogleClient
-                                                       - TelegramClient
+[ Telegram Webhook / Notion Event ]
+               │
+               ▼
+       [ SENSOR LAYER ] ──(Cloudflare Workers / Hono / Durable Objects)
+               │
+               ▼
+     [ GOVERNANCE LAYER ] ──(Vercel AI SDK Intent Router + HITL DO)
+               │
+      ┌────────┴────────────────────────┐
+      ▼                                 ▼
+[ HOT PATH: Real-Time ]       [ COLD PATH: Nightly Batch ]
+  ├── Staging Notes             ├── OpenWiki CLI Engine
+  ├── Tasks & Dependencies      ├── OKF Markdown Synthesis
+  └── Working Memory Handoff    └── GitHub Vault Storage
+      └────────┬────────────────────────┘
+               ▼
+       [ SKILLS LAYER ] ──(6 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff)
+               │
+               ▼
+        [ TOOL LAYER ]  ──(Neon Postgres HTTP Driver + Telegram API + GitHub API)
 ```
 
 ### 1. Sensor Layer (`src/sensors/`)
-Ingests raw Telegram update signals (text, `.ogg` voice notes, URLs), transcribes voice inputs using Gemini LITE inline data processing, and decouples thread execution.
-- `telegramWebhook.ts`: Webhook receiver returning HTTP 200 OK instantly.
-- `eventDispatcher.ts`: Routes payload synchronously (`QUEUE_MODE='sync'`) or asynchronously via GCP Cloud Tasks (`QUEUE_MODE='cloud_tasks'`).
-- `voiceProcessor.ts`: Downloads `.ogg` audio files, calls Gemini LITE to transcribe, and strips filler words.
-
-### Debounce Buffer (MOD-07)
-
-Serverless message batching layer that accumulates rapid-fire messages in Upstash Redis and flushes them as a single merged payload after 4s of inactivity.
-
-**Data Contract (Redis Keys)**:
-- `buffer:${chatId}` — Redis List (RPUSH only, EXPIRE 30s)
-- `buffer_time:${chatId}` — Redis String, Unix timestamp ms (EXPIRE 30s)
-- `is_transcribing:${chatId}` — Redis String, voice transcription lock (EXPIRE 30s)
-
-**Architecture**:
-1. **Ingestion** (`ingestMessage`): RPUSH text → SET timestamp → schedule QStash 4s delay
-2. **Execution** (`processBuffer`): Check staleness → LRANGE+DEL → join with `\n` → `handleWorkerPayload`
-3. **Bypass**: Reply messages (`reply_to_message_id`) skip debounce entirely
-4. **Fail-Open**: Redis unavailable → dispatch directly (ERR-05)
-5. **Spam Protection**: Max 15 messages per buffer (ERR-02)
-6. **Voice Lock**: `is_transcribing` flag suppresses timer during STT (PRD 3.1 Req 6)
-7. **Kill-Switch**: `FEATURE_DEBOUNCE_BUFFER=OFF` env var
-
-**Dependencies**: `@upstash/redis`, `@upstash/qstash`
+Ingests Telegram update signals and Notion updates.
+- `telegramWebhook.ts`: Webhook receiver returning HTTP 200 OK instantly with < 50ms `typing` indicator acknowledgement.
+- `debounceBuffer.ts`: Cloudflare Durable Object providing a 4-second sliding window debounce buffer.
+- `notionFastSync.ts`: Cloudflare Cron Trigger (every 1 min) polling Notion for recent updates and upserting into `notes_staging`.
 
 ### 2. Governance Layer (`src/governance/`)
 Probabilistic routing and session state management.
-- `intentRouter.ts`: Evaluates intent (`Add Task`, `Rescue`, `Highlight`, `Weekly Planning`) using Gemini LITE. Routes score $\ge 95\%$ to Skills/Tools, and score $< 95\%$ to HITL.
-- `hitlManager.ts`: Manages Human-In-The-Loop interactive inline keyboards on Telegram and handles session TTL state in Firestore.
+- `intentRouter.ts`: Evaluates intent across 6 PRD categories using LLMRouter. Routes score ≥ 95% to Skills, and score < 95% to HITL.
+- `hitlManager.ts`: Manages Human-In-The-Loop interactive inline keyboards on Telegram backed by `HitlSession` Durable Object.
 
-### 3. Tool Layer (`src/tools/`)
-Deterministic API clients without AI reasoning. Encapsulates error handling, retries, and rate limits.
-- `notionClient.ts`: Notion SDK wrapper with exponential backoff and `delay(350)` rate-limit throttles.
-- `firestoreClient.ts`: Serverless session state, planning draft persistence, and TTL cleanup.
-- `googleClient.ts`: Google Calendar API integration for busy slot lookups.
-- `telegramClient.ts`: Low-level Telegram Bot API wrappers with HTML parse mode.
-- `triageLockTool.ts`: State lock management for Hard Locks (`triage_map`), Soft Locks (`active_triage_session`), and Distributed Locks (`SETNX`).
+### 3. LLM Router Layer (`src/router/`)
+- `llmRouter.ts`: Provider-agnostic abstraction wrapping Vercel AI SDK (`ai`). Model choices (`LLM_FAST_PROVIDER`, `LLM_PRO_PROVIDER`) driven 100% by environment variables.
 
-### 4. Skills Layer (`src/skills/`)
+### 4. Tool Layer (`src/tools/`)
+Deterministic API clients without AI reasoning.
+- `neonClient.ts`: Neon HTTP serverless driver wrapper with stored procedures (`process_telegram_action`, `get_actionable_tasks`, `get_rescue_tasks`, `hybrid_search`).
+- `telegramClient.ts`: Cloudflare Workers-native Telegram Bot API wrapper (HTML parse mode).
+- `notionClient.ts`: Cloudflare Workers-native read-only Notion REST API client.
+- `githubClient.ts`: OKF GitHub Vault document parser and API client.
+
+### 5. Skills Layer (`src/skills/`)
 Stateful multi-tool workflow orchestration.
-- `taskCaptureSkill.ts`: Parses natural language tasks, matches projects/areas, generates task prefixes, and commits pages to Notion.
-- `weeklyPlanningSkill.ts`: Synthesizes Google Calendar busy slots with Gemini PRO reasoning to output conflict-free weekly schedules and manage Firestore draft approval flows.
-- `triageSkill.ts`: Multi-threaded Inbox Routing & Dynamic State Lock for Telegram native replies and Notion Inbox Tray item classification.
+- `dailyFocusSkill.ts`: Synthesizes actionable tasks + working memory for daily briefings.
+- `taskCaptureSkill.ts`: Natural language task extraction and commit.
+- `rescheduleSkill.ts`: Dependency-aware task rescheduling with conflict warnings.
+- `knowledgeSearchSkill.ts`: Reciprocal Rank Fusion (RRF) Hybrid RAG search across `notes_staging` and `knowledge_wiki`.
+- `rescueModeSkill.ts`: Quick-win low-energy task filter (estimate ≤ 0.5h).
+- `sessionHandoffSkill.ts`: End-of-day working memory snapshot recorder.
 
 ---
 
-## Multi-Model Routing Strategy
-- **LITE Model Tier (`MODELS.LITE`)**: Configured via `GEMINI_MODEL_LITE` (default: `gemini-3.1-flash-lite`) for high-frequency tasks: Voice note transcription, Intent routing, Task extraction, and Text cleaning.
-- **PRO Model Tier (`MODELS.PRO`)**: Configured via `GEMINI_MODEL_PRO` (default: `gemini-3.1-flash`) for complex reasoning: Bulk weekly schedule synthesis and retrospective analysis.
-
----
-
-## Commands & Evaluation
-- **Build**: `npm run build`
-- **Test Harness**: `npm test` (Runs offline integration mock suite)
-- **Evaluation Suite**: `npm run evals` (Runs ground-truth dataset eval in `evals/` enforcing $\ge 95\%$ intent classification accuracy)
-
----
-
-## Dynamic Rule Loading Engine
-
-The project uses a vendor-agnostic Dynamic Rule Loading Engine to manage agent context rules:
-- **Manifest** (`.agents/rules-manifest.json`): SSOT mapping rule IDs to keywords, path globs, and Markdown files. Supports `always_on` boolean for global governance rules.
-- **Rule Engine** (`.agents/scripts/rule-engine.js`): CLI tool accepting `--path` and `--keyword` flags, evaluates manifest, outputs matching rule Markdown content.
-- **Rule Creator** (`.agents/scripts/add-rule.js`): CLI tool enforcing rule creation SOP — auto-generates rule file and updates manifest atomically. Supports `--verify` for integrity auditing.
-- **Adapter Pattern**: Platform-specific integration configured per-adapter (Antigravity via `AGENTS.md` directive, Claude Code via `CLAUDE.md`, OpenCode via custom tool, Cursor via `.mdc` sync).
-
----
-
-## Project Structure
-```text
-.agents/
-├── rules/
-│   ├── github-workflow.md         → [Always On] Git, branching, commit & PR rules
-│   ├── notion-limits.md           → [On-Demand] Notion API rate limiting & throttling
-│   └── centralized-messages.md    → [On-Demand] UI/Bot message constants
-├── rules-manifest.json            → [SSOT] Dynamic rule mapping manifest
-├── scripts/
-│   ├── rule-engine.js             → [Core Engine] CLI rule resolver
-│   └── add-rule.js                → [SOP Enforcer] Automated rule creator
-├── adapters/
-│   └── README.md                  → Platform migration instructions
-├── workflows/
-│   ├── bug-hunting.md             → [On-Demand] Bug triage & remediation
-│   └── deploy-check.md            → [On-Demand] GCP Cloud Run pre-deploy checklist
-├── skills/
-│   └── orchestrator/              → Multi-agent execution loop, self-healing runner & 4 Harness Gates
-│       ├── SKILL.md               → Orchestrator SOP & self-healing laws
-│       ├── scripts/
-│       │   ├── supreme_assistant.js → Ticket orchestrator & Rule Engine pre-check
-│       │   ├── test_runner.js      → Checkpoint 1 (npm test, retry loop & Git Rollback)
-│       │   └── review_dispatcher.js→ Checkpoint 2 (Code Review & Doc Cascade Gate)
-│       └── resources/             → Kanban, execution prompts & state JSONs
-src/
-├── index.ts                       → Webhook entrypoint & routing initialization
-├── config.ts                      → Environment validation & model tier definitions
-├── sensors/                       → [Sensor Layer] Webhook, Dispatcher & Voice Processing
-├── governance/                    → [Governance Layer] Intent Router & HITL Manager
-├── tools/                         → [Tool Layer] Notion, Firestore, Google & Telegram Clients
-├── skills/                        → [Skills Layer] Task Capture & Weekly Planning Skills
-└── constants/                     → Centralized message constants
-evals/                             → Ground-truth evaluation dataset & test runner
-tests/                             → Offline integration test harness
-docs/                              → Documentation & System Specs
-```
+## Verification & Commands
+- **Build**: `npm run build` (`wrangler build`)
+- **Typecheck**: `npm run typecheck` (`tsc --noEmit`)
+- **Test Harness**: `npm test` (Runs offline integration test suite)
+- **Evaluation Suite**: `npm run evals` (Ground-truth dataset accuracy check ≥ 95%)
