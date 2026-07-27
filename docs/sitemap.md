@@ -47,7 +47,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   └── context.md                 # [AIOS Layer 2] Architecture & Neon DB schema reference
 │   └── plans/                         # [Issue Plans & Solutions Archive]
 │       ├── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite (plan.md, solution_report.md)
-│       └── issue-52/                  # OpenWiki Private Vault Setup & Native Notion-to-OKF Synthesis (plan.md, solution_report.md)
+│       ├── issue-52/                  # OpenWiki Private Vault Setup & Native Notion-to-OKF Synthesis (plan.md, solution_report.md)
+│       └── issue-54/                  # HNSW Vector Index Migration & Integration Test (plan.md)
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts
@@ -63,7 +64,9 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   └── llmRouter.ts               # Provider-agnostic LLM router (Vercel AI SDK)
     ├── db/
     │   ├── schema.sql                 # Neon 5-table relational + pgvector schema
-    │   └── procedures.sql             # Atomic RPC stored procedures
+    │   ├── procedures.sql             # Atomic RPC stored procedures
+    │   └── migrations/
+    │       └── 001_convert_ivfflat_to_hnsw.sql # HNSW vector index migration
     ├── sensors/
     │   ├── telegramWebhook.ts         # Telegram webhook receiver (< 50ms typing ack)
     │   ├── debounceBuffer.ts          # Durable Object sliding window debounce buffer

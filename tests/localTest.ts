@@ -9,6 +9,8 @@
  * 5. Neon client SQL procedures and RPC parameters
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import app from '../src/index';
 import { INTENTS } from '../src/governance/intentRouter';
 import { GitHubClient } from '../src/tools/githubClient';
@@ -109,6 +111,29 @@ This document details the dual-speed personal assistant logic.`;
   assert(parsed.title === 'Harness Architecture Concept', 'OKF parser extracts title correctly');
   assert(parsed.tags.length === 3 && parsed.tags.includes('prj226'), 'OKF parser extracts tags array');
   assert(parsed.content.includes('# Harness Architecture'), 'OKF parser extracts markdown body');
+
+  // ─── TEST 5: HNSW Vector Index Migration & Schema Verification ─────────
+  const schemaPath = path.join(__dirname, '../src/db/schema.sql');
+  const migrationPath = path.join(__dirname, '../src/db/migrations/001_convert_ivfflat_to_hnsw.sql');
+
+  assert(fs.existsSync(schemaPath), 'schema.sql exists');
+  assert(fs.existsSync(migrationPath), 'Migration 001_convert_ivfflat_to_hnsw.sql exists');
+
+  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+  assert(
+    schemaSql.includes('idx_notes_staging_embedding') && schemaSql.includes('USING hnsw (embedding vector_cosine_ops)'),
+    'schema.sql uses HNSW index for notes_staging.embedding'
+  );
+  assert(
+    schemaSql.includes('idx_knowledge_wiki_embedding') && schemaSql.includes('USING hnsw (embedding vector_cosine_ops)'),
+    'schema.sql uses HNSW index for knowledge_wiki.embedding'
+  );
+  assert(!schemaSql.includes('ivfflat'), 'schema.sql no longer contains deprecated IVFFLAT vector index');
+
+  const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+  assert(migrationSql.includes('DROP INDEX IF EXISTS idx_notes_staging_embedding;'), 'Migration drops existing idx_notes_staging_embedding');
+  assert(migrationSql.includes('DROP INDEX IF EXISTS idx_knowledge_wiki_embedding;'), 'Migration drops existing idx_knowledge_wiki_embedding');
+  assert(migrationSql.includes('USING hnsw (embedding vector_cosine_ops)'), 'Migration creates new HNSW vector_cosine_ops indexes');
 
   console.log(`\n=== Test Results: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) {
