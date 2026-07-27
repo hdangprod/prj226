@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS notes_staging (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_staging_embedding
-  ON notes_staging USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 100);
+  ON notes_staging USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS idx_notes_staging_synced_at
   ON notes_staging (synced_at DESC);
@@ -41,8 +40,7 @@ CREATE TABLE IF NOT EXISTS knowledge_wiki (
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_wiki_embedding
-  ON knowledge_wiki USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 100);
+  ON knowledge_wiki USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_wiki_tags
   ON knowledge_wiki USING GIN (tags);

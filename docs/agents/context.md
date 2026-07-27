@@ -40,7 +40,7 @@ Stores raw Notion page text for fast real-time search.
 - `notion_page_id` (TEXT, Unique)
 - `title` (TEXT)
 - `raw_text` (TEXT)
-- `embedding` (vector(768))
+- `embedding` (vector(768), HNSW index `vector_cosine_ops`)
 - `synced_at` (TIMESTAMPTZ)
 - `source` (TEXT)
 
@@ -49,7 +49,7 @@ Stores OKF Markdown entries synthesized by OpenWiki Personal Brain.
 - `id` (UUID, Primary Key)
 - `title` (TEXT)
 - `content` (TEXT)
-- `embedding` (vector(768))
+- `embedding` (vector(768), HNSW index `vector_cosine_ops`)
 - `github_path` (TEXT, Unique)
 - `tags` (TEXT[])
 - `synthesized_at` (TIMESTAMPTZ)
