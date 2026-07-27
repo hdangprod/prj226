@@ -39,7 +39,7 @@ const mockEnv: Env = {
   LLM_FAST_API_KEY: 'mock-fast-key',
   LLM_PRO_API_KEY: 'mock-pro-key',
   GITHUB_TOKEN: 'mock-github-token',
-  GITHUB_VAULT_REPO: 'owner/vault',
+  GITHUB_VAULT_REPO: 'hdangprod/hdangprod_wiki',
   FEATURE_DEBOUNCE_BUFFER: 'OFF',
   DEBOUNCE_BUFFER_TIME_MS: '4000',
   DEBOUNCE_MAX_BUFFER_SIZE: '15',
