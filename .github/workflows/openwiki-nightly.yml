@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install OpenWiki CLI (pinned version)
-        run: pip install openwiki==0.1.0
+      - name: Install OpenWiki CLI
+        run: pip install "openwiki>=0.1.0"
 
       - name: Verify OpenWiki installation
         run: openwiki --version
@@ -36,13 +36,11 @@ jobs:
       - name: Run Personal Brain Sync
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENWIKI_OUTPUT_DIR: ./vault
+          VAULT_DIR: ./vault
         run: |
-          echo "🧠 Starting OpenWiki Personal Brain sync..."
-          openwiki personal --update --output ./vault
-          echo "✅ OpenWiki sync complete. Files in vault:"
+          echo "🧠 Starting Notion Personal Brain sync..."
+          node scripts/sync-notion-to-vault.js
+          echo "✅ Notion sync complete. Files in vault:"
           ls -la ./vault/ || echo "(vault directory empty or not created)"
 
       - name: Set up Node.js (for vault indexer)
