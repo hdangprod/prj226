@@ -94,8 +94,8 @@ export class LLMRouter {
     // Embed always uses fast provider's API key
     const embedProvider = fastProvider;
 
-    this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'gemini-2.0-flash', env.LLM_FAST_API_KEY);
-    this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'gemini-2.5-pro', env.LLM_PRO_API_KEY);
+    this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'gemini-2.0-flash-lite', env.LLM_FAST_API_KEY);
+    this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'gemini-2.5-flash', env.LLM_PRO_API_KEY);
     this.embedModel = createEmbedModel(embedProvider, env.LLM_EMBED_MODEL || 'text-embedding-004', env.LLM_FAST_API_KEY);
   }
 

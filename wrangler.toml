@@ -10,11 +10,11 @@ command = ""
 # Use KV for Debounce Buffer & HITL Session state (replaces paid Durable Objects & Queues)
 [[kv_namespaces]]
 binding = "SESSION_KV"
-id = "REPLACE_WITH_SESSION_KV_NAMESPACE_ID"
+id = "bf8509640dfa4d0fa87dd0a1d945c44a"
 
 [[kv_namespaces]]
 binding = "FALLBACK_KV"
-id = "REPLACE_WITH_FALLBACK_KV_NAMESPACE_ID"
+id = "4e32dca1e8f842d29e6b07a19cf163c7"
 
 # ─── Environment Variables (non-secret) ───
 [vars]
@@ -23,9 +23,9 @@ DEBOUNCE_BUFFER_TIME_MS = "4000"
 DEBOUNCE_MAX_BUFFER_SIZE = "15"
 FEATURE_TRIAGE_MODE = "ON"
 LLM_FAST_PROVIDER = "google"
-LLM_FAST_MODEL = "gemini-2.0-flash"
+LLM_FAST_MODEL = "gemini-3.5-flash-lite"
 LLM_PRO_PROVIDER = "google"
-LLM_PRO_MODEL = "gemini-2.5-pro"
+LLM_PRO_MODEL = "gemini-3.6-flash"
 LLM_EMBED_MODEL = "text-embedding-004"
 
 # ─── Secrets (set via wrangler secret put) ───
