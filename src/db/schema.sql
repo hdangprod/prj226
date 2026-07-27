@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ─── 1. notes_staging ───────────────────────────────────────────────────────
--- Raw Notion notes upserted by the Fast-Sync Cron / webhook
+-- Raw Notion notes upserted by OpenWiki Personal Brain or direct sync
 CREATE TABLE IF NOT EXISTS notes_staging (
   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   notion_page_id   TEXT UNIQUE NOT NULL,
@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS knowledge_wiki (
   title            TEXT NOT NULL,
   content          TEXT NOT NULL,
   embedding        vector(768),
-  github_path      TEXT,                           -- path in GitHub Vault repo
+  github_path      TEXT UNIQUE,                    -- path in GitHub Vault repo
+  content_hash     TEXT,                           -- SHA-256 hash for idempotency & token optimization
   tags             TEXT[],
   source_notion_id TEXT,                           -- back-reference to notion page
   synthesized_at   TIMESTAMPTZ DEFAULT now(),
@@ -45,6 +46,9 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_wiki_embedding
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_wiki_tags
   ON knowledge_wiki USING GIN (tags);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_wiki_content_hash
+  ON knowledge_wiki (content_hash);
 
 -- ─── 3. tasks ───────────────────────────────────────────────────────────────
 -- Project tasks with dependency graph and Notion page linkage

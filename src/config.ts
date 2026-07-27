@@ -5,14 +5,11 @@
  */
 
 /**
- * Cloudflare Workers Env bindings interface.
- * This is the typed environment passed to every Worker handler.
+ * Cloudflare Workers Env bindings interface (100% Free Tier Stack).
  */
 export interface Env {
   // ─── Bindings ───
-  DEBOUNCE_BUFFER: DurableObjectNamespace;
-  HITL_SESSION: DurableObjectNamespace;
-  TASK_QUEUE: Queue;
+  SESSION_KV: KVNamespace;
   FALLBACK_KV: KVNamespace;
 
   // ─── Secrets ───

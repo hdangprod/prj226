@@ -17,10 +17,16 @@ interface TestCase {
 }
 
 const mockEnv: Env = {
-  DEBOUNCE_BUFFER: {} as any,
-  HITL_SESSION: {} as any,
-  TASK_QUEUE: {} as any,
-  FALLBACK_KV: {} as any,
+  SESSION_KV: {
+    put: async () => {},
+    get: async () => null,
+    delete: async () => {},
+  } as any,
+  FALLBACK_KV: {
+    put: async () => {},
+    get: async () => null,
+    delete: async () => {},
+  } as any,
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || 'mock',
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || 'mock',
   TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || 'mock',

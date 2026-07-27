@@ -12,11 +12,11 @@ Serverless conversational productivity assistant built with TypeScript (v5.3.3) 
 
 ## Tech Stack
 - **Language**: TypeScript (v5.3.3)
-- **Runtime**: Cloudflare Workers (Hono framework v4.7.0)
+- **Runtime**: Cloudflare Workers (Hono framework v4.7.0 — 100% Free Tier)
 - **Database**: Neon Serverless Postgres (`pgvector` cosine similarity search)
-- **Queuing & State**: Cloudflare Durable Objects (`DebounceBuffer`, `HitlSession`) + Cloudflare Queues (`TASK_QUEUE`)
+- **Queuing & Session**: Cloudflare KV (`SESSION_KV`, `FALLBACK_KV`) + `ctx.waitUntil()` async execution (0$ cost)
 - **LLM Layer**: Vercel AI SDK (`ai` package) with dynamic env-driven model routing (`google`, `openai`, `anthropic`)
-- **Cold Path**: OpenWiki Personal Brain (GitHub Actions nightly OKF synthesis)
+- **Cold Path**: OpenWiki Personal Brain (GitHub Actions every 6 hours with SHA-256 content hash idempotency)
 
 ## Database Schema (Neon Postgres)
 - **`notes_staging`**: Fast-sync raw Notion notes with 768-dim vector embeddings.

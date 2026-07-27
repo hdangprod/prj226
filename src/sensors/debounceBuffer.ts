@@ -1,123 +1,81 @@
 /**
- * PRJ226 v3.0: Debounce Buffer — Cloudflare Durable Object
+ * PRJ226 v3.0: Debounce Buffer (Cloudflare KV Backed — 100% Free Tier)
  *
- * Replaces: Upstash Redis (RPUSH/EXPIRE) + QStash (delayed execution)
- * Pattern:  Message accumulation with 4s TTL flush → Cloudflare Queue
+ * Replaces: Durable Objects & Upstash Redis
+ * Pattern:  KV key accumulation with sliding window TTL
  *
- * Durable Object lifecycle:
- *   POST /ingest      → Accumulate message, (re)schedule alarm for flush
- *   Alarm fires       → Flush all buffered messages as single merged payload
- *
- * Guarantees:
- *   - Max 15 messages per buffer (spam protection)
- *   - 30s state TTL to prevent memory leak
- *   - Fail-open: if DO state is corrupted, clears and continues
+ * Features:
+ *   - 100% Free Tier (Cloudflare KV: 100k reads/day, 1k writes/day)
+ *   - Fast-path execution using Cloudflare Worker ctx.waitUntil()
  */
 
 import type { Env } from '../config';
 import { getDebounceConfig } from '../config';
 
-// ─── Durable Object ──────────────────────────────────────────────────────────
+export interface TelegramUpdate {
+  update_id: number;
+  message?: {
+    message_id: number;
+    from?: { id: number; is_bot: boolean; first_name: string; username?: string };
+    chat: { id: number; type: string };
+    text?: string;
+    date: number;
+  };
+}
 
-export class DebounceBuffer {
-  private state: DurableObjectState;
+export class DebounceManager {
   private env: Env;
 
-  constructor(state: DurableObjectState, env: Env) {
-    this.state = state;
+  constructor(env: Env) {
     this.env = env;
   }
 
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname === '/ingest' && request.method === 'POST') {
-      return this.handleIngest(request);
+  /** Buffer incoming message or merge with existing pending buffer in KV */
+  async bufferMessage(chatId: number, update: Record<string, unknown>): Promise<{ shouldProcess: boolean; mergedPayload: Record<string, unknown> }> {
+    const config = getDebounceConfig(this.env);
+    if (!config.enabled) {
+      return { shouldProcess: true, mergedPayload: update };
     }
 
-    return new Response('Not Found', { status: 404 });
-  }
-
-  /** Alarm fires after bufferTimeMs of inactivity → flush to queue */
-  async alarm(): Promise<void> {
-    await this.flush();
-  }
-
-  // ─── Ingest ────────────────────────────────────────────────────────────────
-
-  private async handleIngest(request: Request): Promise<Response> {
-    const config = getDebounceConfig(this.env);
-
+    const key = `debounce:${chatId}`;
     try {
-      const update = await request.json();
+      const existingRaw = await this.env.SESSION_KV.get(key);
+      let buffer: Record<string, unknown>[] = existingRaw ? JSON.parse(existingRaw) : [];
 
-      // Load current buffer
-      let buffer: unknown[] = (await this.state.storage.get<unknown[]>('buffer')) ?? [];
-
-      // Spam protection: cap at MAX_BUFFER_SIZE
       if (buffer.length >= config.maxBufferSize) {
-        console.warn(`[DebounceBuffer] Buffer full (${buffer.length} msgs). Dropping oldest.`);
         buffer = buffer.slice(-config.maxBufferSize + 1);
       }
 
       buffer.push(update);
-      await this.state.storage.put('buffer', buffer);
-      await this.state.storage.setAlarm(Date.now() + config.bufferTimeMs);
 
-      console.log(`[DebounceBuffer] Buffered. Total: ${buffer.length} messages.`);
-      return new Response(JSON.stringify({ status: 'buffered', count: buffer.length }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // Merge all buffered updates
+      const mergedPayload = mergeUpdates(buffer);
+
+      // Write updated buffer to KV with short TTL (60s)
+      await this.env.SESSION_KV.put(key, JSON.stringify(buffer), { expirationTtl: 60 });
+
+      return { shouldProcess: true, mergedPayload };
     } catch (err) {
-      console.error('[DebounceBuffer] Ingest error. Clearing state:', err);
-      await this.state.storage.deleteAll();
-      return new Response('Internal Error', { status: 500 });
+      console.warn('[DebounceManager] KV error, failing open to direct processing:', err);
+      return { shouldProcess: true, mergedPayload: update };
     }
   }
 
-  // ─── Flush ─────────────────────────────────────────────────────────────────
-
-  private async flush(): Promise<void> {
+  /** Clear buffer state for a chat after processing */
+  async clearBuffer(chatId: number): Promise<void> {
     try {
-      const buffer = await this.state.storage.get<unknown[]>('buffer') ?? [];
-
-      if (buffer.length === 0) {
-        console.log('[DebounceBuffer] Alarm fired but buffer is empty. No-op.');
-        return;
-      }
-
-      console.log(`[DebounceBuffer] Flushing ${buffer.length} buffered messages.`);
-
-      // Merge all buffered messages: use last update as base, combine text
-      const merged = mergeUpdates(buffer as Record<string, unknown>[]);
-
-      // Send merged payload to Cloudflare Queue for AI processing
-      await this.env.TASK_QUEUE.send(merged);
-      console.log('[DebounceBuffer] Flushed merged payload to TASK_QUEUE.');
+      await this.env.SESSION_KV.delete(`debounce:${chatId}`);
     } catch (err) {
-      console.error('[DebounceBuffer] Flush error:', err);
-    } finally {
-      // Always clear buffer and cancel alarm after flush attempt
-      await this.state.storage.deleteAll();
+      console.warn('[DebounceManager] Clear buffer failed:', err);
     }
   }
 }
 
-// ─── Merge Strategy ──────────────────────────────────────────────────────────
-
 function mergeUpdates(updates: Record<string, unknown>[]): Record<string, unknown> {
   if (updates.length === 1) return updates[0];
-
-  // Use the last update as the structural base
   const base = { ...(updates[updates.length - 1] as Record<string, unknown>) };
-
-  // Concatenate all text messages with newlines
   const texts = updates
-    .map((u) => {
-      const msg = u.message as { text?: string } | undefined;
-      return msg?.text;
-    })
+    .map((u) => (u.message as { text?: string } | undefined)?.text)
     .filter((t): t is string => Boolean(t));
 
   if (texts.length > 1 && base.message) {

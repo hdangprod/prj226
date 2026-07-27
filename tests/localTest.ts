@@ -16,14 +16,15 @@ import type { Env } from '../src/config';
 
 // Mock Workers Environment
 const mockEnv: Env = {
-  DEBOUNCE_BUFFER: {} as any,
-  HITL_SESSION: {} as any,
-  TASK_QUEUE: {
-    send: async () => {},
+  SESSION_KV: {
+    put: async () => {},
+    get: async () => null,
+    delete: async () => {},
   } as any,
   FALLBACK_KV: {
     put: async () => {},
     get: async () => null,
+    delete: async () => {},
   } as any,
   TELEGRAM_BOT_TOKEN: 'mock-bot-token',
   TELEGRAM_WEBHOOK_SECRET: 'mock-webhook-secret',

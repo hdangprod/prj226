@@ -1,47 +1,83 @@
 -- PRJ226 v3.0: Neon Stored Procedures (Atomic RPCs)
 -- Run AFTER schema.sql: psql $DATABASE_URL -f src/db/procedures.sql
 
--- ─── process_telegram_action ────────────────────────────────────────────────
--- Atomically marks a task done AND records the next working memory snapshot
--- Guarantees ACID compliance in a single HTTP round-trip via @neondatabase/serverless
+-- ─── process_telegram_action (Generic JSONB RPC) ────────────────────────────
+-- Generic Atomic RPC endpoint handling multi-intent atomic mutations
+-- Clean RPC contract: p_intent (TEXT), p_payload (JSONB)
 CREATE OR REPLACE FUNCTION process_telegram_action(
-  p_complete_task_id   UUID,
-  p_next_task_name     TEXT,
-  p_next_task_id       UUID,
-  p_memory_snapshot    JSONB
+  p_intent   TEXT,
+  p_payload  JSONB
 ) RETURNS JSONB AS $$
 DECLARE
-  v_completed_name TEXT;
-  v_memory_id      UUID;
+  v_complete_task_id UUID;
+  v_completed_name   TEXT;
+  v_next_task_name   TEXT;
+  v_next_task_id     UUID;
+  v_memory_id        UUID;
+  v_task_id          UUID;
 BEGIN
-  -- Step 1: Mark task done
-  UPDATE tasks
-    SET status = 'done', updated_at = now()
-    WHERE id = p_complete_task_id
-    RETURNING name INTO v_completed_name;
+  IF p_intent = 'Complete_Task_With_Handoff' THEN
+    v_complete_task_id := (p_payload->>'complete_task_id')::UUID;
+    v_next_task_name   := p_payload->>'next_task_name';
+    v_next_task_id     := (p_payload->>'next_task_id')::UUID;
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Task % not found', p_complete_task_id;
+    -- Step 1: Mark task done
+    UPDATE tasks
+      SET status = 'done', updated_at = now()
+      WHERE id = v_complete_task_id
+      RETURNING name INTO v_completed_name;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Task % not found', v_complete_task_id;
+    END IF;
+
+    -- Step 2: Insert working memory snapshot
+    INSERT INTO working_memory (last_action, doing, next_action, metadata)
+      VALUES (
+        'completed: ' || v_completed_name,
+        v_next_task_name,
+        v_next_task_id::TEXT,
+        p_payload->'memory_snapshot'
+      )
+      RETURNING id INTO v_memory_id;
+
+    RETURN jsonb_build_object(
+      'success', true,
+      'completed_task', v_completed_name,
+      'memory_id', v_memory_id
+    );
+
+  ELSIF p_intent = 'Create_Task' THEN
+    INSERT INTO tasks (name, priority, estimate_hours, scheduled_date, description)
+      VALUES (
+        p_payload->>'name',
+        COALESCE(p_payload->>'priority', 'medium'),
+        (p_payload->>'estimate_hours')::NUMERIC,
+        (p_payload->>'scheduled_date')::DATE,
+        p_payload->>'description'
+      )
+      RETURNING id INTO v_task_id;
+
+    RETURN jsonb_build_object(
+      'success', true,
+      'task_id', v_task_id
+    );
+
+  ELSIF p_intent = 'Reschedule_Task' THEN
+    UPDATE tasks
+      SET scheduled_date = (p_payload->>'scheduled_date')::DATE,
+          updated_at = now()
+      WHERE id = (p_payload->>'task_id')::UUID;
+
+    RETURN jsonb_build_object(
+      'success', true,
+      'task_id', p_payload->>'task_id',
+      'scheduled_date', p_payload->>'scheduled_date'
+    );
+
+  ELSE
+    RAISE EXCEPTION 'Unknown RPC intent: %', p_intent;
   END IF;
-
-  -- Step 2: Insert working memory snapshot
-  INSERT INTO working_memory (last_action, doing, next_action, metadata)
-    VALUES (
-      'completed: ' || v_completed_name,
-      p_next_task_name,
-      p_next_task_id::TEXT,
-      p_memory_snapshot
-    )
-    RETURNING id INTO v_memory_id;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'completed_task', v_completed_name,
-    'memory_id', v_memory_id
-  );
-EXCEPTION WHEN OTHERS THEN
-  RAISE;
-  -- Transaction automatically rolls back on exception
 END;
 $$ LANGUAGE plpgsql;
 

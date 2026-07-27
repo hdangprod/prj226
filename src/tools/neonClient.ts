@@ -6,7 +6,7 @@
  *
  * Features:
  *   - Typed query executor with automatic parameter binding
- *   - Atomic transaction wrapper
+ *   - Generic JSONB RPC caller (`process_telegram_action`)
  *   - Hybrid RRF search across notes_staging + knowledge_wiki
  *   - Exponential backoff for transient DB errors
  */
@@ -54,6 +54,7 @@ export interface WikiEntry {
   title: string;
   content: string;
   github_path: string | null;
+  content_hash: string | null;
   tags: string[] | null;
   synthesized_at: string;
 }
@@ -105,6 +106,27 @@ export class NeonClient {
     this.sql = neon(env.DATABASE_URL);
   }
 
+  // ─── Generic RPC Execution ──────────────────────────────────────────────────
+
+  /**
+   * Generic Atomic RPC endpoint handling multi-intent atomic mutations
+   * Single RPC entrypoint: process_telegram_action(p_intent TEXT, p_payload JSONB)
+   */
+  async processTelegramAction<T = Record<string, unknown>>(
+    intent: string,
+    payload: Record<string, unknown>,
+  ): Promise<T> {
+    return withRetry(async () => {
+      const rows = await this.sql`
+        SELECT process_telegram_action(
+          ${intent},
+          ${JSON.stringify(payload)}::JSONB
+        ) AS result
+      `;
+      return rows[0].result as T;
+    });
+  }
+
   // ─── Tasks ──────────────────────────────────────────────────────────────────
 
   /** Fetch actionable tasks where all dependencies are completed */
@@ -123,26 +145,6 @@ export class NeonClient {
     });
   }
 
-  /** Mark a task done and record working memory atomically via RPC */
-  async processTelegramAction(params: {
-    completeTaskId: string;
-    nextTaskName: string;
-    nextTaskId: string;
-    memorySnapshot: Record<string, unknown>;
-  }): Promise<{ success: boolean; completed_task: string; memory_id: string }> {
-    return withRetry(async () => {
-      const rows = await this.sql`
-        SELECT process_telegram_action(
-          ${params.completeTaskId}::UUID,
-          ${params.nextTaskName},
-          ${params.nextTaskId}::UUID,
-          ${JSON.stringify(params.memorySnapshot)}::JSONB
-        ) AS result
-      `;
-      return rows[0].result as { success: boolean; completed_task: string; memory_id: string };
-    });
-  }
-
   /** Update a single task status */
   async updateTaskStatus(taskId: string, status: Task['status']): Promise<void> {
     return withRetry(async () => {
@@ -153,9 +155,54 @@ export class NeonClient {
     });
   }
 
+  /** Create a new task and return its generated ID via generic RPC */
+  async createTask(params: {
+    name: string;
+    priority?: 'high' | 'medium' | 'low';
+    estimate_hours?: number | null;
+    scheduled_date?: string | null;
+    description?: string | null;
+  }): Promise<string> {
+    const res = await this.processTelegramAction<{ success: boolean; task_id: string }>('Create_Task', params);
+    return res.task_id;
+  }
+
+  /** Find tasks matching a name pattern */
+  async findTasksByName(namePattern: string, limit = 3): Promise<Task[]> {
+    return withRetry(async () => {
+      const rows = await this.sql`
+        SELECT id, name, status, priority, estimate_hours, scheduled_date,
+               depends_on, project_id, notion_page_id, description, created_at, updated_at
+        FROM tasks
+        WHERE name ILIKE ${'%' + namePattern + '%'}
+          AND status NOT IN ('done', 'archived')
+        LIMIT ${limit}
+      `;
+      return rows as Task[];
+    });
+  }
+
+  /** Get tasks that depend on a given task ID */
+  async getDependentTasks(taskId: string): Promise<Array<{ id: string; name: string; scheduled_date: string | null }>> {
+    return withRetry(async () => {
+      const rows = await this.sql`
+        SELECT id, name, scheduled_date
+        FROM tasks
+        WHERE ${taskId}::UUID = ANY(depends_on)
+          AND status NOT IN ('done', 'archived')
+      `;
+      return rows as Array<{ id: string; name: string; scheduled_date: string | null }>;
+    });
+  }
+
+  /** Update task scheduled_date via generic RPC */
+  async rescheduleTask(taskId: string, scheduled_date: string): Promise<void> {
+    await this.processTelegramAction('Reschedule_Task', { task_id: taskId, scheduled_date });
+  }
+
   // ─── Notes Staging ──────────────────────────────────────────────────────────
 
-  /** Upsert a Notion page into notes_staging (Fast-Sync) */
+  /** Upsert a Notion page into notes_staging */
   async upsertNote(params: {
     notionPageId: string;
     title: string | null;
@@ -254,89 +301,5 @@ export class NeonClient {
     } catch {
       return false;
     }
-  }
-
-  // ─── Raw Query (for skills that need custom SQL) ─────────────────────────────
-
-  /**
-   * Execute a raw parameterized SQL query.
-   * Use this for queries not covered by the typed helper methods above.
-   */
-  async rawQuery<T = Record<string, unknown>>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): Promise<T[]> {
-    return withRetry(async () => {
-      const rows = await this.sql(strings, ...values);
-      return rows as T[];
-    });
-  }
-
-  // ─── Task Creation ──────────────────────────────────────────────────────────
-
-  /** Create a new task and return its generated ID */
-  async createTask(params: {
-    name: string;
-    priority?: 'high' | 'medium' | 'low';
-    estimate_hours?: number | null;
-    scheduled_date?: string | null;
-    description?: string | null;
-    notion_page_id?: string | null;
-    project_id?: string | null;
-  }): Promise<string> {
-    return withRetry(async () => {
-      const rows = await this.sql`
-        INSERT INTO tasks (name, priority, estimate_hours, scheduled_date, description, notion_page_id, project_id)
-        VALUES (
-          ${params.name},
-          ${params.priority ?? 'medium'},
-          ${params.estimate_hours ?? null},
-          ${params.scheduled_date ?? null},
-          ${params.description ?? null},
-          ${params.notion_page_id ?? null},
-          ${params.project_id ?? null}
-        )
-        RETURNING id
-      `;
-      return rows[0].id as string;
-    });
-  }
-
-  /** Find tasks matching a name pattern (for reschedule skill) */
-  async findTasksByName(namePattern: string, limit = 3): Promise<Task[]> {
-    return withRetry(async () => {
-      const rows = await this.sql`
-        SELECT id, name, status, priority, estimate_hours, scheduled_date,
-               depends_on, project_id, notion_page_id, description, created_at, updated_at
-        FROM tasks
-        WHERE name ILIKE ${'%' + namePattern + '%'}
-          AND status NOT IN ('done', 'archived')
-        LIMIT ${limit}
-      `;
-      return rows as Task[];
-    });
-  }
-
-  /** Get tasks that depend on a given task ID */
-  async getDependentTasks(taskId: string): Promise<Array<{ id: string; name: string; scheduled_date: string | null }>> {
-    return withRetry(async () => {
-      const rows = await this.sql`
-        SELECT id, name, scheduled_date
-        FROM tasks
-        WHERE ${taskId}::UUID = ANY(depends_on)
-          AND status NOT IN ('done', 'archived')
-      `;
-      return rows as Array<{ id: string; name: string; scheduled_date: string | null }>;
-    });
-  }
-
-  /** Update task scheduled_date */
-  async rescheduleTask(taskId: string, newDate: string): Promise<void> {
-    return withRetry(async () => {
-      await this.sql`
-        UPDATE tasks SET scheduled_date = ${newDate}, updated_at = now()
-        WHERE id = ${taskId}::UUID
-      `;
-    });
   }
 }

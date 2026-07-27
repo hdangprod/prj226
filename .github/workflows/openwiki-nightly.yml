@@ -2,8 +2,8 @@ name: OpenWiki Nightly Knowledge Sync
 
 on:
   schedule:
-    # 2 AM UTC daily (10 AM ICT) — runs after user's work day ends
-    - cron: '0 2 * * *'
+    # Run every 6 hours (00:00, 06:00, 12:00, 18:00 UTC) for Cold Path Notion knowledge synthesis
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       force_full_sync:
