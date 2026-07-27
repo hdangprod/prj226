@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install OpenWiki CLI (pinned version)
-        run: pip install openwiki==0.1.0
+      - name: Install OpenWiki CLI
+        run: pip install "openwiki>=0.1.0"
 
       - name: Verify OpenWiki installation
         run: openwiki --version
