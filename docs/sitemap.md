@@ -53,6 +53,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 ├── tests/
 │   └── localTest.ts                   # v3.0 Offline integration test harness
 ├── scripts/
+│   ├── sync-notion-to-vault.js        # Notion REST API → OKF Markdown synthesis script
 │   └── index-vault-to-neon.js         # OKF Vault → Neon pgvector indexer script
 └── src/                               # TypeScript application source code
     ├── index.ts                       # Hono entrypoint & routing initialization
