@@ -1,8 +1,8 @@
 ---
 title: "My Second Brain Goals 2026"
-tags: [notion-sync, second-brain]
-category: "Notion Knowledge Base"
-synthesized_at: "2026-07-27T11:35:26.370Z"
+tags: [resources, second-brain]
+category: "Notion Resources"
+synthesized_at: "2026-07-27T16:01:39.612Z"
 ---
 
 # My Second Brain Goals 2026

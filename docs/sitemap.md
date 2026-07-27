@@ -46,7 +46,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── agents/
 │   │   └── context.md                 # [AIOS Layer 2] Architecture & Neon DB schema reference
 │   └── plans/                         # [Issue Plans & Solutions Archive]
-│       └── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite (plan.md, solution_report.md)
+│       ├── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite (plan.md, solution_report.md)
+│       └── issue-52/                  # OpenWiki Private Vault Setup & Native Notion-to-OKF Synthesis (plan.md, solution_report.md)
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts
