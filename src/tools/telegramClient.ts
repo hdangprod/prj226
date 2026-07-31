@@ -75,7 +75,7 @@ export async function sendMessageWithKeyboard(
     text: truncated,
     parse_mode: 'HTML',
     disable_web_page_preview: true,
-    reply_markup: JSON.stringify(keyboard),
+    reply_markup: keyboard,
   }, env);
 }
 
