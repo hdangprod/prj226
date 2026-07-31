@@ -7,13 +7,13 @@
  */
 
 import type { SkillContext } from '../governance/intentRouter';
-import { NeonClient } from '../tools/neonClient';
+import { D1Client } from '../tools/d1Client';
 import { LLMRouter } from '../router/llmRouter';
 import { sendMessage } from '../tools/telegramClient';
 
 export async function handleDailyFocus(ctx: SkillContext): Promise<void> {
   const { chatId, env } = ctx;
-  const neon = new NeonClient(env);
+  const d1 = new D1Client(env);
   const llm = new LLMRouter(env);
 
   // Update status message
@@ -21,8 +21,8 @@ export async function handleDailyFocus(ctx: SkillContext): Promise<void> {
 
   // Fetch data in parallel
   const [tasks, memory] = await Promise.all([
-    neon.getActionableTasks(10),
-    neon.getLatestWorkingMemory(),
+    d1.getActionableTasks(10),
+    d1.getLatestWorkingMemory(),
   ]);
 
   if (tasks.length === 0) {

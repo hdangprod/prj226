@@ -1,17 +1,7 @@
-/**
- * PRJ226 v3.0: Telegram Webhook Handler (Sensor Layer)
- *
- * Responsibilities:
- *   1. Receive Telegram update payloads (text, voice, callback_query)
- *   2. Fire sendChatAction("typing") immediately (< 50ms UX ack)
- *   3. Dispatch non-blocking AI execution via ExecutionContext ctx.waitUntil()
- *   4. KV-backed debounce buffering (100% Free Tier)
- */
-
 import type { Env } from '../config';
-import { sendChatAction } from '../tools/telegramClient';
+import { sendChatAction, sendMessage } from '../tools/telegramClient';
 import { handleWorkerPayload } from '../governance/intentRouter';
-import { DebounceManager } from './debounceBuffer';
+import { D1Client } from '../tools/d1Client';
 
 export interface TelegramUpdate {
   update_id: number;
@@ -20,6 +10,7 @@ export interface TelegramUpdate {
     from?: { id: number; is_bot: boolean; first_name: string; username?: string };
     chat: { id: number; type: string };
     text?: string;
+    voice?: { file_id: string; duration: number };
     reply_to_message?: unknown;
     date: number;
   };
@@ -37,38 +28,64 @@ export async function handleTelegramWebhook(
   ctx: ExecutionContext,
 ): Promise<void> {
   const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
+  if (!chatId) return;
 
-  if (!chatId) {
-    console.warn('[TelegramWebhook] No chatId found in update. Dropping.');
-    return;
-  }
+  // 1. Idempotency check
+  const d1 = new D1Client(env);
+  if (await d1.isProcessed(update.update_id)) return;
+  await d1.markProcessed(update.update_id);
 
-  // ─── Typing ack (< 50ms UX feedback) ──────────────────────────────────────
-  ctx.waitUntil(
-    sendChatAction(chatId, 'typing', env).catch((err) =>
-      console.warn('[TelegramWebhook] sendChatAction failed (non-fatal):', err),
-    ),
-  );
+  // 2. Typing ack
+  ctx.waitUntil(sendChatAction(chatId, 'typing', env).catch(() => {}));
 
-  // ─── Direct execution for callback_query & replies ───────────────
+  // 3. Callback queries bypass debounce
   if (update.callback_query || update.message?.reply_to_message) {
     ctx.waitUntil(handleWorkerPayload(update as unknown as Record<string, unknown>, env));
     return;
   }
 
-  // ─── KV Debounce Buffer ──────────────────────────────────────────────────
-  const debounceManager = new DebounceManager(env);
-  const { shouldProcess, mergedPayload } = await debounceManager.bufferMessage(chatId, update as unknown as Record<string, unknown>);
-
-  if (shouldProcess) {
-    ctx.waitUntil(
-      (async () => {
-        try {
-          await handleWorkerPayload(mergedPayload, env);
-        } finally {
-          await debounceManager.clearBuffer(chatId);
-        }
-      })(),
-    );
+  // 4. Extract text (with voice transcription)
+  let text = update.message?.text ?? '';
+  if (update.message?.voice) {
+    text = await transcribeVoice(update.message.voice.file_id, env);
   }
+  if (!text.trim()) return;
+
+  const userId = update.message?.from?.id ?? chatId;
+
+  // 5. KV Debounce Buffer
+  const kvKey = `debounce:${userId}`;
+  const prevText = await env.SESSION_KV.get(kvKey);
+  const combinedText = prevText ? `${prevText}\n${text}` : text;
+  await env.SESSION_KV.put(kvKey, combinedText, { expirationTtl: 4 });
+
+  // First message: send ack
+  if (!prevText) {
+    ctx.waitUntil(sendMessage(chatId, '⏳ <i>Grouping messages...</i>', env).catch(() => {}));
+  }
+
+  // 6. Background debounce finalization
+  ctx.waitUntil((async () => {
+    await new Promise(r => setTimeout(r, 4500));
+    const finalText = await env.SESSION_KV.get(kvKey);
+    if (finalText !== combinedText) return; // newer message overwrote, exit
+
+    await env.SESSION_KV.delete(kvKey);
+    await handleWorkerPayload(
+      { message: { ...update.message, text: finalText } } as unknown as Record<string, unknown>,
+      env,
+    );
+  })());
+}
+
+async function transcribeVoice(fileId: string, env: Env): Promise<string> {
+  // 1. Get file path from Telegram
+  const fileRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`);
+  const fileData = (await fileRes.json()) as { result: { file_path: string } };
+  // 2. Download audio
+  const audioRes = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`);
+  const audioBuffer = await audioRes.arrayBuffer();
+  // 3. Transcribe with Whisper
+  const result = await env.AI.run('@cf/openai/whisper-large-v3-turbo' as any, { audio: [...new Uint8Array(audioBuffer)] });
+  return (result as any).text || '';
 }

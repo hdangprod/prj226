@@ -7,19 +7,19 @@
  */
 
 import type { SkillContext } from '../governance/intentRouter';
-import { NeonClient } from '../tools/neonClient';
+import { D1Client } from '../tools/d1Client';
 import { LLMRouter } from '../router/llmRouter';
 import { sendMessage } from '../tools/telegramClient';
 
 export async function handleSessionHandoff(ctx: SkillContext): Promise<void> {
   const { chatId, userText, env } = ctx;
-  const neon = new NeonClient(env);
+  const d1 = new D1Client(env);
   const llm = new LLMRouter(env);
 
   await sendMessage(chatId, '🌙 <i>Saving your session handoff...</i>', env);
 
   // Get current in-progress tasks
-  const inProgressTasks = await neon.getActionableTasks(5);
+  const inProgressTasks = await d1.getActionableTasks(5);
   const taskSummary = inProgressTasks
     .map((t) => `- ${t.name} [${t.status}]`)
     .join('\n') || 'No active tasks.';
@@ -32,7 +32,7 @@ export async function handleSessionHandoff(ctx: SkillContext): Promise<void> {
 
   // Save to working memory
   const nextTask = inProgressTasks[0];
-  await neon.saveWorkingMemory({
+  await d1.saveWorkingMemory({
     lastAction: userText || 'Session handoff',
     doing: inProgressTasks[0]?.name,
     nextAction: nextTask?.name,

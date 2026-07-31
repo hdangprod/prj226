@@ -1,29 +1,43 @@
 /**
- * PRJ226 v3.0: Offline Integration Test Suite
+ * PRJ226 v4.1: Offline Integration Test Suite
  *
  * Runs offline validation for:
  * 1. Intent taxonomy schema contracts (6 PRD intents)
  * 2. LLMRouter provider-agnostic interface
- * 3. Hono Web Application router (/health endpoint, /webhook protection)
- * 4. GitHub OKF document parsing logic
- * 5. Neon client SQL procedures and RPC parameters
+ * 3. Hono Web Application router (/health endpoint, /webhook protection, /github-webhook)
+ * 4. GitHub OKF document parsing & Git Data API reader logic
+ * 5. D1 Edge Stack Schema & 0002 migration verification
+ * 6. Chunking by H2 headings algorithm
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import app from '../src/index';
 import { INTENTS } from '../src/governance/intentRouter';
-import { GitHubClient } from '../src/tools/githubClient';
+import { GitHubReader } from '../src/tools/githubClient';
+import { parseFrontMatter, chunkByHeadings } from '../src/lib/chunking';
 import type { Env } from '../src/config';
 
-// Mock Workers Environment
+// Mock Workers Environment (v4.1 Pure Edge Stack)
 const mockEnv: Env = {
-  SESSION_KV: {
-    put: async () => {},
-    get: async () => null,
-    delete: async () => {},
+  DB: {
+    prepare: () => ({
+      bind: () => ({
+        first: async () => ({ p: 1 }),
+        all: async () => ({ results: [] }),
+        run: async () => {},
+      }),
+    }),
   } as any,
-  FALLBACK_KV: {
+  VECTORIZE: {
+    query: async () => ({ matches: [] }),
+    upsert: async () => {},
+    deleteByIds: async () => {},
+  } as any,
+  AI: {
+    run: async () => ({ data: [[0.1, 0.2, 0.3]] }),
+  } as any,
+  SESSION_KV: {
     put: async () => {},
     get: async () => null,
     delete: async () => {},
@@ -31,30 +45,23 @@ const mockEnv: Env = {
   TELEGRAM_BOT_TOKEN: 'mock-bot-token',
   TELEGRAM_WEBHOOK_SECRET: 'mock-webhook-secret',
   TELEGRAM_CHAT_ID: '12345678',
-  NOTION_API_KEY: 'mock-notion-key',
-  NOTION_TASKS_DB_ID: 'mock-tasks-db',
-  NOTION_PROJECTS_DB_ID: 'mock-projects-db',
-  NOTION_AREAS_DB_ID: 'mock-areas-db',
-  NOTION_RESOURCES_DB_ID: 'mock-resources-db',
-  NOTION_DAILY_LOGS_DB_ID: 'mock-logs-db',
-  DATABASE_URL: 'postgres://mock:mock@localhost:5432/mock',
+  GITHUB_TOKEN: 'mock-github-token',
+  GITHUB_WEBHOOK_SECRET: 'mock-github-webhook-secret',
+  GITHUB_OWNER: 'hdangprod',
+  GITHUB_REPO: 'hdangprod_wiki',
+  EMBEDDING_MODEL: '@cf/baai/bge-base-en-v1.5',
+  EMBEDDING_DIMENSIONS: '768',
+  TELEGRAM_BOT_USERNAME: 'liam_second_brain_bot',
+  LLM_FAST_PROVIDER: 'google',
+  LLM_FAST_MODEL: 'gemini-3.5-flash-lite',
+  LLM_PRO_PROVIDER: 'google',
+  LLM_PRO_MODEL: 'gemini-3.6-flash',
   LLM_FAST_API_KEY: 'mock-fast-key',
   LLM_PRO_API_KEY: 'mock-pro-key',
-  GITHUB_TOKEN: 'mock-github-token',
-  GITHUB_VAULT_REPO: 'hdangprod/hdangprod_wiki',
-  FEATURE_DEBOUNCE_BUFFER: 'OFF',
-  DEBOUNCE_BUFFER_TIME_MS: '4000',
-  DEBOUNCE_MAX_BUFFER_SIZE: '15',
-  FEATURE_TRIAGE_MODE: 'ON',
-  LLM_FAST_PROVIDER: 'google',
-  LLM_FAST_MODEL: 'gemini-2.0-flash',
-  LLM_PRO_PROVIDER: 'google',
-  LLM_PRO_MODEL: 'gemini-2.5-pro',
-  LLM_EMBED_MODEL: 'text-embedding-004',
 };
 
 async function runTests() {
-  console.log('=== Starting PRJ226 v3.0 Offline Integration Tests ===\n');
+  console.log('=== Starting PRJ226 v4.1 Offline Integration Tests ===\n');
 
   let passed = 0;
   let failed = 0;
@@ -97,43 +104,52 @@ async function runTests() {
   const botRes = await app.fetch(botReq, mockEnv, mockCtx);
   assert(botRes.status === 200, 'Bot protection drops updates from bot users cleanly with 200 OK');
 
-  // ─── TEST 4: OKF Front Matter Parser ───────────────────────────────────
-  const github = new GitHubClient(mockEnv);
+  // ─── TEST 4: OKF Front Matter & GitHubReader Parser ─────────────────────
+  const github = new GitHubReader(mockEnv);
   const sampleOKF = `---
-title: "Harness Architecture Concept"
-tags: [architecture, second-brain, prj226]
+title: "Obsidian Vault Architecture"
+tags: [architecture, obsidian, prj226]
 category: "Tech Spec"
 ---
-# Harness Architecture
-This document details the dual-speed personal assistant logic.`;
+# Obsidian Edge Vault
+This document details the local-first obsidian edge architecture.`;
 
   const parsed = github.parseOKFDocument('vault/harness.md', sampleOKF);
-  assert(parsed.title === 'Harness Architecture Concept', 'OKF parser extracts title correctly');
+  assert(parsed.title === 'Obsidian Vault Architecture', 'OKF parser extracts title correctly');
   assert(parsed.tags.length === 3 && parsed.tags.includes('prj226'), 'OKF parser extracts tags array');
-  assert(parsed.content.includes('# Harness Architecture'), 'OKF parser extracts markdown body');
+  assert(parsed.content.includes('# Obsidian Edge Vault'), 'OKF parser extracts markdown body');
 
-  // ─── TEST 5: HNSW Vector Index Migration & Schema Verification ─────────
-  const schemaPath = path.join(__dirname, '../src/db/schema.sql');
-  const migrationPath = path.join(__dirname, '../src/db/migrations/001_convert_ivfflat_to_hnsw.sql');
+  // ─── TEST 5: Heading-Based Markdown Chunker ─────────────────────────────
+  const frontMatter = parseFrontMatter(sampleOKF);
+  assert(frontMatter.title === 'Obsidian Vault Architecture', 'parseFrontMatter extracts title');
+  assert(frontMatter.tags?.includes('obsidian') === true, 'parseFrontMatter extracts tags');
 
-  assert(fs.existsSync(schemaPath), 'schema.sql exists');
-  assert(fs.existsSync(migrationPath), 'Migration 001_convert_ivfflat_to_hnsw.sql exists');
+  const multiHeadingMd = `---
+title: "Multi Heading Note"
+tags: [test]
+---
+Intro paragraph here.
 
-  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-  assert(
-    schemaSql.includes('idx_notes_staging_embedding') && schemaSql.includes('USING hnsw (embedding vector_cosine_ops)'),
-    'schema.sql uses HNSW index for notes_staging.embedding'
-  );
-  assert(
-    schemaSql.includes('idx_knowledge_wiki_embedding') && schemaSql.includes('USING hnsw (embedding vector_cosine_ops)'),
-    'schema.sql uses HNSW index for knowledge_wiki.embedding'
-  );
-  assert(!schemaSql.includes('ivfflat'), 'schema.sql no longer contains deprecated IVFFLAT vector index');
+## Section 1
+Content of section 1 with enough text to test splitting logic across multiple sections in markdown documents.
+
+## Section 2
+Content of section 2 detailing secondary topic details.`;
+
+  const chunks = await chunkByHeadings(multiHeadingMd, 'notes/test.md');
+  assert(chunks.length >= 1, 'chunkByHeadings produces valid chunks');
+
+  // ─── TEST 6: D1 Migration 0002_v4_edge_stack.sql Verification ─────────
+  const migrationPath = path.join(__dirname, '../migrations/0002_v4_edge_stack.sql');
+  assert(fs.existsSync(migrationPath), 'Migration 0002_v4_edge_stack.sql exists');
 
   const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-  assert(migrationSql.includes('DROP INDEX IF EXISTS idx_notes_staging_embedding;'), 'Migration drops existing idx_notes_staging_embedding');
-  assert(migrationSql.includes('DROP INDEX IF EXISTS idx_knowledge_wiki_embedding;'), 'Migration drops existing idx_knowledge_wiki_embedding');
-  assert(migrationSql.includes('USING hnsw (embedding vector_cosine_ops)'), 'Migration creates new HNSW vector_cosine_ops indexes');
+  assert(migrationSql.includes('processed_updates'), 'Migration creates processed_updates table');
+  assert(migrationSql.includes('pending_captures'), 'Migration creates pending_captures table');
+  assert(migrationSql.includes('note_chunks_cache'), 'Migration creates note_chunks_cache table');
+  assert(migrationSql.includes('note_chunks_fts'), 'Migration creates FTS5 note_chunks_fts table');
+  assert(migrationSql.includes('tasks'), 'Migration creates tasks table');
+  assert(migrationSql.includes('working_memory'), 'Migration creates working_memory table');
 
   console.log(`\n=== Test Results: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) {

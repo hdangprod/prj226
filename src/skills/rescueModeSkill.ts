@@ -7,16 +7,16 @@
  */
 
 import type { SkillContext } from '../governance/intentRouter';
-import { NeonClient } from '../tools/neonClient';
+import { D1Client } from '../tools/d1Client';
 import { sendMessage } from '../tools/telegramClient';
 
 export async function handleRescueMode(ctx: SkillContext): Promise<void> {
   const { chatId, env } = ctx;
-  const neon = new NeonClient(env);
+  const d1 = new D1Client(env);
 
   await sendMessage(chatId, '💤 <i>Finding easy wins for you...</i>', env);
 
-  const tasks = await neon.getRescueTasks(0.5, 5);
+  const tasks = await d1.getRescueTasks(0.5, 5);
 
   if (tasks.length === 0) {
     await sendMessage(

@@ -1,32 +1,31 @@
 /**
- * PRJ226 v3.0: Knowledge Search Skill
+ * PRJ226 v4.1: Knowledge Search Skill
  * Intent: Knowledge_Search
  *
- * Executes Hybrid RAG search using Reciprocal Rank Fusion (RRF) across:
- *   - notes_staging (real-time raw Notion data)
- *   - knowledge_wiki (OpenWiki OKF synthesized entries)
- *
- * Returns a cited summary with inline Telegram action buttons for source access.
+ * Executes Hybrid RAG search using Reciprocal Rank Fusion (RRF) via D1 and Vectorize.
+ * Returns a cited summary with inline Telegram action buttons for source access and Obsidian deep links.
  */
 
 import type { SkillContext } from '../governance/intentRouter';
-import { NeonClient } from '../tools/neonClient';
+import { D1Client } from '../tools/d1Client';
 import { LLMRouter } from '../router/llmRouter';
 import { sendMessage, sendMessageWithKeyboard } from '../tools/telegramClient';
+import { embedText } from '../lib/embeddings';
+import { hybridSearch } from '../lib/hybridSearch';
 
 export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
   const { chatId, userText, env } = ctx;
-  const neon = new NeonClient(env);
+  const d1 = new D1Client(env);
   const llm = new LLMRouter(env);
 
   await sendMessage(chatId, '🔍 <i>Searching your knowledge base...</i>', env);
 
   // Generate query embedding
-  const embedding = await llm.embedText(userText);
+  const embedding = await embedText(userText, env);
 
   // RRF hybrid search
   await sendMessage(chatId, '🧠 <i>Calculating relevance scores...</i>', env);
-  const results = await neon.hybridSearch(embedding, 5);
+  const results = await hybridSearch(userText, embedding, env);
 
   if (results.length === 0) {
     await sendMessage(
@@ -37,11 +36,17 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
     return;
   }
 
+  const resultIds = results.map(r => r.id);
+  const chunks = await d1.getChunksByIds(resultIds);
+
+  // Re-order chunks based on search result order
+  const orderedChunks = results.map(r => chunks.find(c => c.id === r.id)).filter(c => c != null) as any[];
+
   // Synthesize a cited summary
-  const sourceContext = results
+  const sourceContext = orderedChunks
     .map(
-      (r, i) =>
-        `[Source ${i + 1} — ${r.source === 'notes_staging' ? 'Notion Note' : 'Wiki'}] ${r.title}:\n${r.content.substring(0, 300)}...`,
+      (c, i) =>
+        `[Source ${i + 1}] ${c.title || c.file_path}:\n${c.content.substring(0, 300)}...`,
     )
     .join('\n\n');
 
@@ -51,32 +56,30 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
   );
 
   // Build inline keyboard for source links
-  const notionResults = results.filter((r) => r.source === 'notes_staging').slice(0, 2);
-  const wikiResults = results.filter((r) => r.source === 'knowledge_wiki').slice(0, 2);
+  const keyboardRows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
 
-  const keyboardRows: Array<Array<{ text: string; callback_data: string }>> = [];
+  for (const c of orderedChunks.slice(0, 4)) {
+    const titleText = c.title ? c.title.substring(0, 20) : c.file_path.substring(0, 20);
+    const vault = 'hdangprod_wiki';
+    const cleanPath = (c.file_path || '').replace(/\.md$/, '');
+    const url = `obsidian://open?vault=${vault}&file=${encodeURIComponent(cleanPath)}`;
 
-  if (notionResults.length > 0) {
-    keyboardRows.push(
-      notionResults.map((r) => ({
-        text: `📝 ${r.title.substring(0, 20)}`,
-        callback_data: `view_notion:${r.id}`,
-      })),
-    );
-  }
-  if (wikiResults.length > 0) {
-    keyboardRows.push(
-      wikiResults.map((r) => ({
-        text: `📖 ${r.title.substring(0, 20)}`,
-        callback_data: `view_wiki:${r.id}`,
-      })),
-    );
+    keyboardRows.push([
+      {
+        text: `📝 ${titleText}`,
+        callback_data: `view_chunk:${c.id}`,
+      },
+      {
+        text: `🔗 Obsidian`,
+        url,
+      }
+    ]);
   }
 
   await sendMessageWithKeyboard(
     chatId,
     `🔍 <b>Knowledge Search Results</b>\n\n${summary}`,
-    { inline_keyboard: keyboardRows },
+    { inline_keyboard: keyboardRows as any },
     env,
   );
 }

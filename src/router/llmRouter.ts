@@ -10,10 +10,8 @@
  *   - 'anthropic' → @ai-sdk/anthropic (e.g. claude-haiku / claude-sonnet)
  */
 
-import { generateText, generateObject, embed } from 'ai';
+import { generateText, generateObject } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import type { ZodSchema } from 'zod';
 import type { Env } from '../config';
 
@@ -53,31 +51,11 @@ function createModel(provider: Provider, modelId: string, apiKey: string) {
       const google = createGoogleGenerativeAI({ apiKey });
       return google(modelId);
     }
-    case 'openai': {
-      const openai = createOpenAI({ apiKey });
-      return openai(modelId);
-    }
-    case 'anthropic': {
-      const anthropic = createAnthropic({ apiKey });
-      return anthropic(modelId);
-    }
+    case 'openai':
+    case 'anthropic':
+      throw new Error(`[LLMRouter] Provider ${provider} is not installed`);
     default:
       throw new Error(`[LLMRouter] Unsupported provider: ${provider}`);
-  }
-}
-
-function createEmbedModel(provider: Provider, modelId: string, apiKey: string) {
-  switch (provider) {
-    case 'google': {
-      const google = createGoogleGenerativeAI({ apiKey });
-      return google.textEmbeddingModel(modelId);
-    }
-    case 'openai': {
-      const openai = createOpenAI({ apiKey });
-      return openai.embedding(modelId);
-    }
-    default:
-      throw new Error(`[LLMRouter] Embedding not supported for provider: ${provider}`);
   }
 }
 
@@ -86,17 +64,13 @@ function createEmbedModel(provider: Provider, modelId: string, apiKey: string) {
 export class LLMRouter {
   private readonly fastModel: ReturnType<typeof createModel>;
   private readonly proModel: ReturnType<typeof createModel>;
-  private readonly embedModel: ReturnType<typeof createEmbedModel>;
 
   constructor(env: Env) {
     const fastProvider = (env.LLM_FAST_PROVIDER || 'google') as Provider;
     const proProvider = (env.LLM_PRO_PROVIDER || 'google') as Provider;
-    // Embed always uses fast provider's API key
-    const embedProvider = fastProvider;
 
     this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'gemini-2.0-flash-lite', env.LLM_FAST_API_KEY);
     this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'gemini-2.5-flash', env.LLM_PRO_API_KEY);
-    this.embedModel = createEmbedModel(embedProvider, env.LLM_EMBED_MODEL || 'text-embedding-004', env.LLM_FAST_API_KEY);
   }
 
   /** Fast model: intent routing, task extraction, text parsing */
@@ -138,14 +112,5 @@ export class LLMRouter {
     });
   }
 
-  /** Generate 768-dim embedding vector for semantic search */
-  async embedText(text: string): Promise<number[]> {
-    return withRetry(async () => {
-      const result = await embed({
-        model: this.embedModel,
-        value: text,
-      });
-      return result.embedding;
-    });
-  }
+
 }

@@ -1,21 +1,14 @@
-/**
- * PRJ226 v3.0: Cloudflare Workers Entry Point (Hono — 100% Free Tier)
- *
- * Routes:
- *   POST /webhook          → Telegram update receiver (< 50ms typing ack + ctx.waitUntil)
- *   POST /worker           → Async processing endpoint
- *   GET  /health           → Health check
- */
-
 import { Hono } from 'hono';
 import type { Env } from './config';
 import { handleTelegramWebhook } from './sensors/telegramWebhook';
 import { handleWorkerPayload } from './governance/intentRouter';
-import { NeonClient } from './tools/neonClient';
+import { handleGitHubPushWebhook } from './indexers/vaultIndexer';
+import { D1Client } from './tools/d1Client';
+import { batchCommitCaptures } from './tools/gitBatchClient';
 
 const app = new Hono<{ Bindings: Env }>();
 
-// ─── Middleware: Bot protection ────────────────────────────────────────────────
+// Bot protection middleware
 app.use('/webhook', async (c, next) => {
   const body = await c.req.json().catch(() => null);
   if (body?.message?.from?.is_bot === true) {
@@ -25,36 +18,64 @@ app.use('/webhook', async (c, next) => {
   return next();
 });
 
-// ─── Telegram Webhook ─────────────────────────────────────────────────────────
+// Telegram Webhook
 app.post('/webhook', async (c) => {
   const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token');
   if (secret !== c.env.TELEGRAM_WEBHOOK_SECRET) {
     return c.text('Unauthorized', 401);
   }
-
   const body = await c.req.json();
-  // Dispatch non-blocking processing via executionContext
   await handleTelegramWebhook(body, c.env, c.executionCtx as any);
   return c.text('OK', 200);
 });
 
-// ─── Internal Task Consumer ──────────────────────────────────────────────────
+// GitHub Push Webhook
+app.post('/github-webhook', async (c) => {
+  return handleGitHubPushWebhook(c.req.raw, c.env);
+});
+
+// Internal Worker endpoint
 app.post('/worker', async (c) => {
   const body = await c.req.json();
   await handleWorkerPayload(body, c.env);
   return c.text('OK', 200);
 });
 
-// ─── Health Check ─────────────────────────────────────────────────────────────
+// Health Check
 app.get('/health', async (c) => {
-  const neon = new NeonClient(c.env);
-  const dbOk = await neon.ping();
-  return c.json({ status: 'ok', db: dbOk ? 'connected' : 'unreachable', version: '3.0.0' });
+  const d1 = new D1Client(c.env);
+  const dbOk = await d1.ping();
+  return c.json({ status: 'ok', db: dbOk ? 'connected' : 'unreachable', version: '4.1.0' });
 });
 
-// ─── Cloudflare Worker Default Export ────────────────────────────────────────
+// Cloudflare Worker exports
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return app.fetch(request, env, ctx);
+  },
+
+  // Cron Trigger: flush pending_captures to GitHub every 5 minutes
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    const d1 = new D1Client(env);
+    const captures = await d1.getPendingCaptures(50);
+    if (captures.length === 0) return;
+
+    try {
+      await batchCommitCaptures(captures, env);
+      await d1.deletePendingCaptures(captures.map(c => c.id));
+      console.log(JSON.stringify({
+        event: 'cron_flush_success',
+        captures_flushed: captures.length,
+        timestamp: new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error(JSON.stringify({
+        event: 'cron_flush_error',
+        error: (err as Error).message,
+        captures_pending: captures.length,
+        timestamp: new Date().toISOString(),
+      }));
+      // Captures remain in D1 for retry next cycle
+    }
   },
 };

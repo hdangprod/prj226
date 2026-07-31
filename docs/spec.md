@@ -1,89 +1,92 @@
 ---
-title: "Spec: PRJ226 v3.0 AI-Native Second Brain Architecture & Dual-Speed Personal Assistant (Liam)"
-version: 3.0.0
-date: 2026-07-27
+title: "Spec: PRJ226 v4.1 AI-Native Second Brain Architecture & Obsidian Edge Stack (Liam)"
+version: 4.1.0
+date: 2026-07-31
 type: specification
 ---
 
-# Spec: PRJ226 v3.0 AI-Native Second Brain Architecture & Dual-Speed Personal Assistant (Liam)
+# Spec: PRJ226 v4.1 AI-Native Second Brain Architecture & Obsidian Edge Stack (Liam)
 
 ## Objective
-Serverless conversational productivity assistant built with TypeScript (v5.3.3) for Cloudflare Workers and Neon Serverless Postgres (`pgvector`). Orchestrates a Notion Second Brain and OpenWiki Personal Knowledge Vault using a model-agnostic LLM router (Vercel AI SDK).
+Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second Brain Orchestrator & Conversational Assistant built with TypeScript (v5.3.3) for Cloudflare Workers. Orchestrates an Obsidian local vault (Single Source of Truth) backed by a GitHub private repository (`hdangprod/hdangprod_wiki`) and Cloudflare D1 + Vectorize + Workers AI.
 
 ## Tech Stack
 - **Language**: TypeScript (v5.3.3)
 - **Runtime**: Cloudflare Workers (Hono framework v4.7.0 — 100% Free Tier)
-- **Database**: Neon Serverless Postgres (`pgvector` HNSW cosine similarity search)
-- **Queuing & Session**: Cloudflare KV (`SESSION_KV`, `FALLBACK_KV`) + `ctx.waitUntil()` async execution (0$ cost)
-- **LLM Layer**: Vercel AI SDK (`ai` package) with dynamic env-driven model routing (`google`, `openai`, `anthropic`)
-- **Cold Path**: OpenWiki Personal Brain (GitHub Actions every 6 hours with SHA-256 content hash idempotency)
+- **Database & Cache**: Cloudflare D1 (`DB` - SQLite at Edge for metadata, tasks, working memory, note_chunks_cache, FTS5)
+- **Vector Search**: Cloudflare Vectorize (`VECTORIZE` - 768-dim cosine index for note chunks)
+- **AI & Audio Engine**: Cloudflare Workers AI (`AI` - `@cf/baai/bge-base-en-v1.5` for 768-dim embeddings, `@cf/openai/whisper-large-v3-turbo` for voice transcription)
+- **LLM Synthesis & Routing**: Vercel AI SDK (`ai` + `@ai-sdk/google`) for model-agnostic intent classification and response generation
+- **Queuing & Debounce**: Cloudflare KV (`SESSION_KV`) 4-second sliding window buffer + `ctx.waitUntil()` async execution
+- **Git Sync Engine**: GitHub Git Data API (`POST /git/blobs` -> `POST /git/trees` -> `POST /git/commits` -> `PATCH /git/refs`) for batched commits (5-min Cron Trigger)
+- **Human Interface**: Obsidian Local Vault (Markdown `.md`) + Telegram Bot (`liam_second_brain_bot`)
 
-## Database Schema (Neon Postgres)
-- **`notes_staging`**: Fast-sync raw Notion notes with 768-dim vector embeddings (HNSW `vector_cosine_ops`).
-- **`knowledge_wiki`**: OKF Markdown entries synthesized by OpenWiki Personal Brain (HNSW `vector_cosine_ops`).
-- **`tasks`**: Project tasks with dependency graph (`depends_on` UUID arrays), scheduled dates, and priorities.
-- **`working_memory`**: Handoff context state (`last_action`, `doing`, `next_action`, `metadata`).
-- **`habits`**: Habit tracking log.
+## Database Schema (Cloudflare D1: `migrations/0002_v4_edge_stack.sql`)
+- **`processed_updates`**: Global idempotency table (`update_id` BIGINT PK).
+- **`pending_captures`**: Staging queue for rapid Telegram captures (`id`, `content`, `source`, `file_path`, `created_at`).
+- **`note_chunks_cache`**: Read-through Markdown content & chunk metadata cache (`id`, `github_path`, `chunk_index`, `title`, `content`, `content_hash`, `tags`, `updated_at`).
+- **`note_chunks_fts`**: FTS5 Virtual Table automatically synchronized with `note_chunks_cache` via triggers (`chunks_ai`, `chunks_ad`, `chunks_au`).
+- **`tasks`**: Tasks with dependency graph, scheduled dates, and priorities (`id`, `name`, `status`, `priority`, `estimate_hours`, `scheduled_date`, `depends_on`, `description`).
+- **`working_memory`**: Session state snapshots (`id`, `last_action`, `doing`, `next_action`, `metadata`, `snapshot_at`).
 
 ## Architecture: 4-Layer Closed-Loop System
 
 ```
-[ Telegram Webhook / Notion Event ]
-               │
-               ▼
-       [ SENSOR LAYER ] ──(Cloudflare Workers / Hono / Durable Objects)
-               │
-               ▼
-     [ GOVERNANCE LAYER ] ──(Vercel AI SDK Intent Router + HITL DO)
-               │
-      ┌────────┴────────────────────────┐
-      ▼                                 ▼
-[ HOT PATH: Real-Time ]       [ COLD PATH: Nightly Batch ]
-  ├── Staging Notes             ├── OpenWiki CLI Engine
-  ├── Tasks & Dependencies      ├── OKF Markdown Synthesis
-  └── Working Memory Handoff    └── GitHub Vault Storage
-      └────────┬────────────────────────┘
-               ▼
-       [ SKILLS LAYER ] ──(6 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff)
-               │
-               ▼
-        [ TOOL LAYER ]  ──(Neon Postgres HTTP Driver + Telegram API + GitHub API)
+[ Telegram Webhook (Text/Voice) / GitHub Push Webhook ]
+                       │
+                       ▼
+               [ SENSOR LAYER ] ──(Cloudflare Workers / Hono / KV Debounce / Whisper AI)
+                       │
+                       ▼
+             [ GOVERNANCE LAYER ] ──(Vercel AI SDK Intent Router + Auto-Capture + HITL)
+                       │
+              ┌────────┴────────────────────────┐
+              ▼                                 ▼
+      [ HOT PATH: Query ]             [ FAST INGESTION & COLD PATH ]
+        ├── D1 Content Cache            ├── D1 pending_captures
+        ├── Vectorize ANN Search        ├── 5-min Cron Batch Commit (Git Data API)
+        └── D1 FTS5 Keyword Search      └── GitHub Vault Sync (hdangprod_wiki)
+              └────────┬────────────────────────┘
+                       ▼
+               [ SKILLS LAYER ] ──(6 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff)
+                       │
+                       ▼
+                [ TOOL LAYER ]  ──(D1Client + VectorizeClient + GitBatchClient + GitHubReader + Telegram API)
 ```
 
 ### 1. Sensor Layer (`src/sensors/`)
-Ingests Telegram update signals and Notion updates.
-- `telegramWebhook.ts`: Webhook receiver returning HTTP 200 OK instantly with < 50ms `typing` indicator acknowledgement.
-- `debounceBuffer.ts`: Cloudflare Durable Object providing a 4-second sliding window debounce buffer.
-- `notionFastSync.ts`: Cloudflare Cron Trigger (every 1 min) polling Notion for recent updates and upserting into `notes_staging`.
+- `telegramWebhook.ts`: Webhook receiver with < 50ms typing indicator ack, Whisper voice transcription via Workers AI, and 4-second KV debounce buffering before intent routing.
 
 ### 2. Governance Layer (`src/governance/`)
-Probabilistic routing and session state management.
-- `intentRouter.ts`: Evaluates intent across 6 PRD categories using LLMRouter. Routes score ≥ 95% to Skills, and score < 95% to HITL.
-- `hitlManager.ts`: Manages Human-In-The-Loop interactive inline keyboards on Telegram backed by `HitlSession` Durable Object.
+- `intentRouter.ts`: Evaluates intent across 6 categories using LLMRouter. Confidence ≥ 95% dispatches to Skill. Confidence < 95% auto-captures thought to `pending_captures` AND presents HITL clarification keyboard with Obsidian deep link.
 
-### 3. LLM Router Layer (`src/router/`)
-- `llmRouter.ts`: Provider-agnostic abstraction wrapping Vercel AI SDK (`ai`). Model choices (`LLM_FAST_PROVIDER`, `LLM_PRO_PROVIDER`) driven 100% by environment variables.
+### 3. LLM Router & Embeddings (`src/router/`, `src/lib/`)
+- `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`).
+- `embeddings.ts`: Workers AI `@cf/baai/bge-base-en-v1.5` 768-dim embedding generator + SHA-256 content hash namespacing.
+- `chunking.ts`: Markdown H2 heading chunker.
+- `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3).
 
 ### 4. Tool Layer (`src/tools/`)
-Deterministic API clients without AI reasoning.
-- `neonClient.ts`: Neon HTTP serverless driver wrapper with stored procedures (`process_telegram_action`, `get_actionable_tasks`, `get_rescue_tasks`, `hybrid_search`).
-- `telegramClient.ts`: Cloudflare Workers-native Telegram Bot API wrapper (HTML parse mode).
-- `notionClient.ts`: Cloudflare Workers-native read-only Notion REST API client.
-- `githubClient.ts`: OKF GitHub Vault document parser and API client.
+- `d1Client.ts`: Cloudflare D1 prepared statement client with exponential backoff & jitter.
+- `vectorizeClient.ts`: Cloudflare Vectorize upsert/delete client (100-item batching).
+- `gitBatchClient.ts`: GitHub Git Data API batch commit engine (flushes `pending_captures` to GitHub in 1 commit).
+- `githubClient.ts`: GitHub Git Data API blob reader (`GitHubReader`) and OKF document parser.
+- `telegramClient.ts`: Telegram Bot API wrapper.
 
-### 5. Skills Layer (`src/skills/`)
-Stateful multi-tool workflow orchestration.
-- `dailyFocusSkill.ts`: Synthesizes actionable tasks + working memory for daily briefings.
-- `taskCaptureSkill.ts`: Natural language task extraction and commit.
+### 5. Indexer (`src/indexers/`)
+- `vaultIndexer.ts`: GitHub push webhook handler (`POST /github-webhook`) verifying HMAC-SHA256 signatures, diffing chunk content hashes, and upserting into D1 `note_chunks_cache` + Vectorize.
+
+### 6. Skills Layer (`src/skills/`)
+- `dailyFocusSkill.ts`: Synthesizes actionable tasks + working memory for daily focus briefings.
+- `taskCaptureSkill.ts`: Natural language task extraction to D1 `tasks` table + Obsidian deep link button.
 - `rescheduleSkill.ts`: Dependency-aware task rescheduling with conflict warnings.
-- `knowledgeSearchSkill.ts`: Reciprocal Rank Fusion (RRF) Hybrid RAG search across `notes_staging` and `knowledge_wiki`.
-- `rescueModeSkill.ts`: Quick-win low-energy task filter (estimate ≤ 0.5h).
-- `sessionHandoffSkill.ts`: End-of-day working memory snapshot recorder.
+- `knowledgeSearchSkill.ts`: Zero GitHub API call hot-path search reading directly from D1 `note_chunks_cache` + Obsidian deep link buttons.
+- `rescueModeSkill.ts`: Quick-win task filter (estimate ≤ 0.5h).
+- `sessionHandoffSkill.ts`: Session working memory snapshot recorder.
 
 ---
 
 ## Verification & Commands
 - **Build**: `npm run build` (`wrangler build`)
 - **Typecheck**: `npm run typecheck` (`tsc --noEmit`)
-- **Test Harness**: `npm test` (Runs offline integration test suite)
-- **Evaluation Suite**: `npm run evals` (Ground-truth dataset accuracy check ≥ 95%)
+- **Test Harness**: `npm test` (Runs 22 offline integration tests)

@@ -1,26 +1,21 @@
 {
   "name": "prj226-liam-second-brain",
-  "version": "3.0.0",
-  "description": "Dual-Speed AI Second Brain (Liam) — Cloudflare Workers + Neon Postgres + Vercel AI SDK",
+  "version": "4.1.0",
+  "description": "AI-Native Second Brain Orchestrator — Cloudflare Edge Stack + Obsidian Vault",
   "private": true,
   "scripts": {
     "build": "wrangler build",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' tests/localTest.ts",
+    "test": "npx ts-node --compiler-options '{\"module\":\"CommonJS\",\"types\":[\"node\",\"@cloudflare/workers-types\"]}' tests/localTest.ts",
     "evals": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' evals/run-evals.ts",
     "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/google": "^1.0.0",
-    "@ai-sdk/openai": "^1.0.0",
-    "@neondatabase/serverless": "^0.10.4",
-    "@notionhq/client": "^2.2.15",
     "ai": "^4.0.0",
     "hono": "^4.7.0",
-    "minimatch": "^10.2.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {

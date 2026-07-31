@@ -1,0 +1,352 @@
+import type { Env } from '../config';
+
+export interface PendingCapture {
+  id: string;
+  content: string;
+  source: string;
+  file_path: string;
+  created_at: string;
+}
+
+export interface Task {
+  id: string;
+  name: string;
+  status: string;
+  priority: string;
+  estimate_hours: number | null;
+  scheduled_date: string | null;
+  depends_on: string[] | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActionableTask {
+  id: string;
+  name: string;
+  status: string;
+  priority: string;
+  estimate_hours: number | null;
+  scheduled_date: string | null;
+}
+
+export interface WorkingMemory {
+  id: string;
+  last_action: string | null;
+  doing: string | null;
+  next_action: string | null;
+  metadata: Record<string, unknown> | null;
+  snapshot_at: string;
+}
+
+export interface NoteChunk {
+  id: string;
+  github_path: string;
+  chunk_index: number;
+  title: string | null;
+  content: string;
+  content_hash: string;
+  tags: string | null;
+  updated_at: string;
+}
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        console.error(JSON.stringify({ error: 'DB operation failed after retries', attempt, maxRetries }));
+        throw err;
+      }
+      const baseMs = Math.pow(2, attempt) * 100;
+      const jitter = Math.random() * 100;
+      await new Promise((resolve) => setTimeout(resolve, baseMs + jitter));
+    }
+  }
+  throw new Error('Unreachable');
+}
+
+export class D1Client {
+  private env: Env;
+
+  constructor(env: Env) {
+    this.env = env;
+  }
+
+  // Idempotency
+  async isProcessed(updateId: number): Promise<boolean> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('SELECT update_id FROM processed_updates WHERE update_id = ?').bind(updateId);
+      const res = await stmt.first();
+      return !!res;
+    });
+  }
+
+  async markProcessed(updateId: number): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('INSERT OR IGNORE INTO processed_updates (update_id) VALUES (?)').bind(updateId);
+      await stmt.run();
+    });
+  }
+
+  // Pending Captures
+  async createCapture(content: string, filePath: string): Promise<string> {
+    return withRetry(async () => {
+      const id = crypto.randomUUID();
+      const stmt = this.env.DB.prepare(
+        'INSERT INTO pending_captures (id, content, source, file_path) VALUES (?, ?, ?, ?)'
+      ).bind(id, content, 'telegram', filePath);
+      await stmt.run();
+      return id;
+    });
+  }
+
+  async getPendingCaptures(limit: number = 50): Promise<PendingCapture[]> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('SELECT * FROM pending_captures ORDER BY created_at ASC LIMIT ?').bind(limit);
+      const res = await stmt.all<PendingCapture>();
+      return res.results || [];
+    });
+  }
+
+  async deletePendingCaptures(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    return withRetry(async () => {
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = this.env.DB.prepare(`DELETE FROM pending_captures WHERE id IN (${placeholders})`).bind(...ids);
+      await stmt.run();
+    });
+  }
+
+  // Tasks
+  async createTask(params: { name: string; priority?: string; estimate_hours?: number | null; scheduled_date?: string | null; description?: string | null }): Promise<string> {
+    return withRetry(async () => {
+      const id = crypto.randomUUID();
+      const stmt = this.env.DB.prepare(
+        `INSERT INTO tasks (id, name, priority, estimate_hours, scheduled_date, description)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(
+        id,
+        params.name,
+        params.priority || 'medium',
+        params.estimate_hours ?? null,
+        params.scheduled_date ?? null,
+        params.description ?? null
+      );
+      await stmt.run();
+      return id;
+    });
+  }
+
+  async getActionableTasks(limit: number = 50): Promise<ActionableTask[]> {
+    return withRetry(async () => {
+      const allTasksStmt = this.env.DB.prepare('SELECT id, status FROM tasks');
+      const allTasksRes = await allTasksStmt.all<{ id: string; status: string }>();
+      const taskStatusMap = new Map((allTasksRes.results || []).map((t) => [t.id, t.status]));
+
+      const notStartedStmt = this.env.DB.prepare("SELECT * FROM tasks WHERE status = 'not_started'");
+      const notStartedRes = await notStartedStmt.all<{
+        id: string;
+        name: string;
+        status: string;
+        priority: string;
+        estimate_hours: number | null;
+        scheduled_date: string | null;
+        depends_on: string | null;
+      }>();
+      const notStarted = notStartedRes.results || [];
+
+      const actionable = notStarted.filter((task) => {
+        if (!task.depends_on) return true;
+        try {
+          const deps: string[] = JSON.parse(task.depends_on);
+          return deps.every((depId) => taskStatusMap.get(depId) === 'done');
+        } catch (e) {
+          return true; // if invalid JSON, treat as no valid dependencies
+        }
+      });
+
+      const getPriorityVal = (p: string) => (p === 'high' ? 1 : p === 'medium' ? 2 : 3);
+      actionable.sort((a, b) => {
+        const pA = getPriorityVal(a.priority);
+        const pB = getPriorityVal(b.priority);
+        if (pA !== pB) return pA - pB;
+        // fallback sort by id as created_at is not selected or guaranteed if not in DB res explicitly
+        return a.id.localeCompare(b.id);
+      });
+
+      return actionable.slice(0, limit).map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        priority: t.priority,
+        estimate_hours: t.estimate_hours,
+        scheduled_date: t.scheduled_date,
+      }));
+    });
+  }
+
+  async getRescueTasks(maxHours: number = 1, limit: number = 10): Promise<ActionableTask[]> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        "SELECT id, name, status, priority, estimate_hours, scheduled_date FROM tasks WHERE status = 'not_started' AND estimate_hours <= ? ORDER BY estimate_hours ASC LIMIT ?"
+      ).bind(maxHours, limit);
+      const res = await stmt.all<ActionableTask>();
+      return res.results || [];
+    });
+  }
+
+  async findTasksByName(namePattern: string, limit: number = 10): Promise<Task[]> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        "SELECT * FROM tasks WHERE name LIKE ? AND status NOT IN ('done', 'archived') LIMIT ?"
+      ).bind(`%${namePattern}%`, limit);
+      const res = await stmt.all<any>();
+      return (res.results || []).map((t) => ({
+        ...t,
+        depends_on: t.depends_on ? JSON.parse(t.depends_on) : null,
+      }));
+    });
+  }
+
+  async getDependentTasks(taskId: string): Promise<Array<{ id: string; name: string; scheduled_date: string | null }>> {
+    return withRetry(async () => {
+      // This is a naive filter because SQLite doesn't do JSON contains efficiently without json1 extension
+      const stmt = this.env.DB.prepare('SELECT id, name, scheduled_date, depends_on FROM tasks');
+      const res = await stmt.all<{ id: string; name: string; scheduled_date: string | null; depends_on: string | null }>();
+      const tasks = res.results || [];
+      return tasks.filter((t) => {
+        if (!t.depends_on) return false;
+        try {
+          const deps: string[] = JSON.parse(t.depends_on);
+          return deps.includes(taskId);
+        } catch {
+          return false;
+        }
+      }).map((t) => ({
+        id: t.id,
+        name: t.name,
+        scheduled_date: t.scheduled_date,
+      }));
+    });
+  }
+
+  async rescheduleTask(taskId: string, newDate: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('UPDATE tasks SET scheduled_date = ? WHERE id = ?').bind(newDate, taskId);
+      await stmt.run();
+    });
+  }
+
+  async updateTaskStatus(taskId: string, status: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('UPDATE tasks SET status = ? WHERE id = ?').bind(status, taskId);
+      await stmt.run();
+    });
+  }
+
+  // Working Memory
+  async getLatestWorkingMemory(): Promise<WorkingMemory | null> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('SELECT * FROM working_memory ORDER BY snapshot_at DESC LIMIT 1');
+      const res = await stmt.first<any>();
+      if (!res) return null;
+      return {
+        ...res,
+        metadata: res.metadata ? JSON.parse(res.metadata) : null,
+      };
+    });
+  }
+
+  async saveWorkingMemory(snapshot: { lastAction?: string; doing?: string; nextAction?: string; metadata?: Record<string, unknown> }): Promise<string> {
+    return withRetry(async () => {
+      const id = crypto.randomUUID();
+      const metaStr = snapshot.metadata ? JSON.stringify(snapshot.metadata) : null;
+      const stmt = this.env.DB.prepare(
+        'INSERT INTO working_memory (id, last_action, doing, next_action, metadata) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, snapshot.lastAction ?? null, snapshot.doing ?? null, snapshot.nextAction ?? null, metaStr);
+      await stmt.run();
+      return id;
+    });
+  }
+
+  // Note Chunks Cache
+  async upsertNoteChunk(params: { id: string; githubPath: string; chunkIndex: number; title: string | null; content: string; contentHash: string; tags: string | null }): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        `INSERT INTO note_chunks_cache (id, github_path, chunk_index, title, content, content_hash, tags)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+         title=excluded.title, content=excluded.content, content_hash=excluded.content_hash, tags=excluded.tags, updated_at=CURRENT_TIMESTAMP`
+      ).bind(
+        params.id,
+        params.githubPath,
+        params.chunkIndex,
+        params.title,
+        params.content,
+        params.contentHash,
+        params.tags
+      );
+      await stmt.run();
+    });
+  }
+
+  async deleteNoteChunksByPath(githubPath: string): Promise<string[]> {
+    return withRetry(async () => {
+      const selectStmt = this.env.DB.prepare('SELECT id FROM note_chunks_cache WHERE github_path = ?').bind(githubPath);
+      const res = await selectStmt.all<{ id: string }>();
+      const ids = (res.results || []).map((r) => r.id);
+
+      if (ids.length > 0) {
+        const deleteStmt = this.env.DB.prepare('DELETE FROM note_chunks_cache WHERE github_path = ?').bind(githubPath);
+        await deleteStmt.run();
+      }
+      return ids;
+    });
+  }
+
+  async getChunksByIds(ids: string[]): Promise<NoteChunk[]> {
+    if (ids.length === 0) return [];
+    return withRetry(async () => {
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = this.env.DB.prepare(`SELECT * FROM note_chunks_cache WHERE id IN (${placeholders})`).bind(...ids);
+      const res = await stmt.all<NoteChunk>();
+      return res.results || [];
+    });
+  }
+
+  async getChunkHashesByPath(githubPath: string): Promise<Array<{ id: string; content_hash: string }>> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('SELECT id, content_hash FROM note_chunks_cache WHERE github_path = ?').bind(githubPath);
+      const res = await stmt.all<{ id: string; content_hash: string }>();
+      return res.results || [];
+    });
+  }
+
+  // FTS5 Search
+  async ftsSearch(query: string, limit: number = 20): Promise<Array<{ id: string; title: string; rank: number }>> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        'SELECT id, title, bm25(note_chunks_fts) as rank FROM note_chunks_fts WHERE note_chunks_fts MATCH ? ORDER BY rank LIMIT ?'
+      ).bind(query, limit);
+      const res = await stmt.all<{ id: string; title: string; rank: number }>();
+      return res.results || [];
+    });
+  }
+
+  // Health
+  async ping(): Promise<boolean> {
+    try {
+      await withRetry(async () => {
+        const stmt = this.env.DB.prepare('SELECT 1 as p');
+        await stmt.first();
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}

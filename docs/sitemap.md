@@ -18,7 +18,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 5-Layer system & DB schemas. |
 | **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, Cloudflare Workers pre-deploy checklist. |
 | **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, 6 PRD skill intents (Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff). |
-| **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@src/router/llmRouter.ts`<br>`@.agents/rules-manifest.json` | `On-Demand` | Dynamic rule engine, provider-agnostic LLMRouter, Neon DB client, Telegram client, GitHub client. |
+| **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@src/router/llmRouter.ts`<br>`@src/lib/`<br>`@.agents/rules-manifest.json` | `On-Demand` | Dynamic rule engine, provider-agnostic LLMRouter, D1 client, Vectorize client, GitBatch client, GitHubReader, Telegram client. |
 | **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`) and detailed solution report (`solution_report.md`). |
 
 ---
@@ -28,7 +28,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 ```
 .
 ├── AGENTS.md                          # [AIOS Layer 1] System identity & core directives
-├── wrangler.toml                      # Cloudflare Worker configuration (Durable Objects, Queues, KV, Crons)
+├── wrangler.toml                      # Cloudflare Worker configuration (D1, Vectorize, AI, KV, Crons)
 ├── .agents/
 │   ├── rules/
 │   │   ├── github-workflow.md         # [AIOS Layer 1 - Always On] Git, branching, commit & PR rules
@@ -42,48 +42,51 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 ├── docs/
 │   ├── sitemap.md                     # [AIOS Layer 2] Master AI & System sitemap
 │   ├── index.md                       # [AIOS Layer 2] Master knowledge base index
-│   ├── spec.md                        # [AIOS Layer 2] Complete technical specification (v3.0.0)
+│   ├── spec.md                        # [AIOS Layer 2] Complete technical specification (v4.1.0)
 │   ├── agents/
-│   │   └── context.md                 # [AIOS Layer 2] Architecture & Neon DB schema reference
+│   │   └── context.md                 # [AIOS Layer 2] Architecture & D1 Edge Stack schema reference
 │   └── plans/                         # [Issue Plans & Solutions Archive]
-│       ├── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite (plan.md, solution_report.md)
-│       ├── issue-52/                  # OpenWiki Private Vault Setup & Native Notion-to-OKF Synthesis (plan.md, solution_report.md)
-│       └── issue-54/                  # HNSW Vector Index Migration & Integration Test (plan.md)
+│       ├── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite
+│       ├── issue-52/                  # OpenWiki Private Vault Setup & Native Notion-to-OKF Synthesis
+│       ├── issue-54/                  # HNSW Vector Index Migration & Integration Test
+│       └── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts
 ├── tests/
-│   └── localTest.ts                   # v3.0 Offline integration test harness
-├── scripts/
-│   ├── sync-notion-to-vault.js        # Notion REST API → OKF Markdown synthesis script
-│   └── index-vault-to-neon.js         # OKF Vault → Neon pgvector indexer script
+│   └── localTest.ts                   # v4.1 Offline integration test harness (22 tests)
+├── migrations/                        # Cloudflare D1 SQL Migrations
+│   ├── 0001_init.sql                  # [Historical] Initial schema
+│   └── 0002_v4_edge_stack.sql         # [Active] D1 SQLite + FTS5 + Triggers schema
 └── src/                               # TypeScript application source code
     ├── index.ts                       # Hono entrypoint & routing initialization
     ├── config.ts                      # Cloudflare Workers environment bindings & type contracts
     ├── router/
     │   └── llmRouter.ts               # Provider-agnostic LLM router (Vercel AI SDK)
-    ├── db/
-    │   ├── schema.sql                 # Neon 5-table relational + pgvector schema
-    │   ├── procedures.sql             # Atomic RPC stored procedures
-    │   └── migrations/
-    │       └── 001_convert_ivfflat_to_hnsw.sql # HNSW vector index migration
+    ├── lib/
+    │   ├── embeddings.ts              # Workers AI embeddings & SHA-256 content hash
+    │   ├── chunking.ts                # Heading-based Markdown chunker & frontmatter parser
+    │   ├── hybridSearch.ts            # RRF (Reciprocal Rank Fusion) hybrid search engine
+    │   └── fetchUtils.ts              # Resilient fetchWithRetry helper
+    ├── indexers/
+    │   └── vaultIndexer.ts            # GitHub Push Webhook handler (edge cache indexer)
     ├── sensors/
-    │   ├── telegramWebhook.ts         # Telegram webhook receiver (< 50ms typing ack)
-    │   ├── debounceBuffer.ts          # Durable Object sliding window debounce buffer
-    │   └── notionFastSync.ts          # Cloudflare Cron polling sensor
+    │   └── telegramWebhook.ts         # Telegram webhook receiver (Whisper AI + KV 4s debounce)
     ├── governance/
-    │   ├── intentRouter.ts            # LLM intent classifier (6 intents)
-    │   └── hitlManager.ts             # Durable Object HITL session manager
+    │   └── intentRouter.ts            # LLM intent classifier (6 intents + Auto-Capture + HITL)
     ├── tools/
-    │   ├── neonClient.ts              # Neon serverless HTTP driver client
-    │   ├── telegramClient.ts          # Telegram Bot API client (fetch-native)
-    │   ├── notionClient.ts            # Notion REST API client (read-only)
-    │   └── githubClient.ts            # GitHub REST API client (vault reader)
-    └── skills/                        # 6 PRD skill handlers
-        ├── dailyFocusSkill.ts
-        ├── taskCaptureSkill.ts
-        ├── rescheduleSkill.ts
-        ├── knowledgeSearchSkill.ts
-        ├── rescueModeSkill.ts
-        └── sessionHandoffSkill.ts
+    │   ├── d1Client.ts                # D1 database prepared-statement client
+    │   ├── vectorizeClient.ts         # Cloudflare Vectorize client
+    │   ├── gitBatchClient.ts          # GitHub Git Data API batch commit client
+    │   ├── githubClient.ts            # GitHub Git Data API blob reader (GitHubReader)
+    │   └── telegramClient.ts          # Telegram Bot API client (fetch-native)
+    ├── skills/                        # 6 PRD skill handlers
+    │   ├── dailyFocusSkill.ts
+    │   ├── taskCaptureSkill.ts
+    │   ├── rescheduleSkill.ts
+    │   ├── knowledgeSearchSkill.ts
+    │   ├── rescueModeSkill.ts
+    │   └── sessionHandoffSkill.ts
+    └── types/
+        └── index.ts                   # Re-exported type definitions hub
 ```

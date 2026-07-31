@@ -20,6 +20,7 @@
 import { z } from 'zod';
 import type { Env } from '../config';
 import { LLMRouter } from '../router/llmRouter';
+import { D1Client } from '../tools/d1Client';
 import { sendMessage, sendMessageWithKeyboard } from '../tools/telegramClient';
 import { handleDailyFocus } from '../skills/dailyFocusSkill';
 import { handleTaskCapture } from '../skills/taskCaptureSkill';
@@ -81,6 +82,8 @@ export async function handleWorkerPayload(
     console.warn('[IntentRouter] No chatId in payload. Dropping.');
     return;
   }
+  
+  console.log(JSON.stringify({ event: 'intent_router_start', chatId }));
 
   // Handle callback_query (button presses) separately
   if (update.callback_query) {
@@ -122,6 +125,8 @@ export async function handleWorkerPayload(
 
   // Dispatch to skill
   await dispatchToSkill(classification, chatId, userText, update as unknown as TelegramUpdate, env);
+  
+  console.log(JSON.stringify({ event: 'intent_router_end', chatId }));
 }
 
 // ─── Skill Dispatcher ───────────────────────────────────────────────────────────
@@ -176,6 +181,14 @@ async function sendHITLClarification(
   classification: IntentResponse,
   env: Env,
 ): Promise<void> {
+  // Auto-capture to pending_captures (never lose a thought)
+  const d1 = new D1Client(env);
+  const now = new Date();
+  const datePath = now.toISOString().split('T')[0];
+  const timePart = now.toTimeString().split(' ')[0].replace(/:/g, '');
+  const filePath = `inbox/${datePath}/${timePart}.md`;
+  await d1.createCapture(userText, filePath);
+
   const keyboard = {
     inline_keyboard: [
       [
@@ -190,6 +203,12 @@ async function sendHITLClarification(
         { text: '💤 Rescue Mode', callback_data: 'intent:Rescue_Mode' },
         { text: '🌙 End Session', callback_data: 'intent:Session_Handoff' },
       ],
+      [
+        {
+          text: '📝 Open in Obsidian',
+          url: `obsidian://new?vault=hdangprod_wiki&file=inbox/${datePath}/${timePart}&content=${encodeURIComponent(userText)}`,
+        }
+      ]
     ],
   };
 

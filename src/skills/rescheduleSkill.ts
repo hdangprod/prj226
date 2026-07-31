@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import type { SkillContext } from '../governance/intentRouter';
-import { NeonClient } from '../tools/neonClient';
+import { D1Client } from '../tools/d1Client';
 import { LLMRouter } from '../router/llmRouter';
 import { sendMessage, sendMessageWithKeyboard } from '../tools/telegramClient';
 
@@ -20,7 +20,7 @@ const RescheduleExtractSchema = z.object({
 
 export async function handleReschedule(ctx: SkillContext): Promise<void> {
   const { chatId, userText, env } = ctx;
-  const neon = new NeonClient(env);
+  const d1 = new D1Client(env);
   const llm = new LLMRouter(env);
 
   await sendMessage(chatId, '🔄 <i>Checking dependencies...</i>', env);
@@ -35,7 +35,7 @@ export async function handleReschedule(ctx: SkillContext): Promise<void> {
   );
 
   // Find task in Neon using the public findTasksByName method
-  const matchingTasks = await neon.findTasksByName(extracted.taskName, 3);
+  const matchingTasks = await d1.findTasksByName(extracted.taskName, 3);
 
   if (matchingTasks.length === 0) {
     await sendMessage(
@@ -49,7 +49,7 @@ export async function handleReschedule(ctx: SkillContext): Promise<void> {
   const task = matchingTasks[0];
 
   // Check if any other task depends on this one
-  const dependents = await neon.getDependentTasks(task.id);
+  const dependents = await d1.getDependentTasks(task.id);
 
   if (dependents.length > 0) {
     const depList = dependents.map((d) => `• <b>${escapeHtml(d.name)}</b>`).join('\n');
@@ -86,7 +86,7 @@ Do you want to force reschedule anyway, or resolve the dependencies first?`,
   }
 
   // Perform the reschedule
-  await neon.rescheduleTask(task.id, newDate);
+  await d1.rescheduleTask(task.id, newDate);
 
   await sendMessage(
     chatId,
