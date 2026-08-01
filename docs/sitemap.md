@@ -32,6 +32,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 ├── .agents/
 │   ├── rules/
 │   │   ├── github-workflow.md         # [AIOS Layer 1 - Always On] Git, branching, commit & PR rules
+│   │   ├── database-isolation.md      # [AIOS Layer 1 - Always On] Strict test vs prod D1 isolation rules
 │   │   └── centralized-messages.md    # [AIOS Layer 5 - On-Demand] UI/Bot text message constants
 │   ├── rules-manifest.json            # [SSOT] Dynamic rule mapping manifest
 │   ├── scripts/
@@ -47,9 +48,10 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   │   └── context.md                 # [AIOS Layer 2] Architecture & D1 Edge Stack schema reference
 │   └── plans/                         # [Issue Plans & Solutions Archive]
 │       ├── issue-50/                  # Cloudflare Workers + Neon Postgres Greenfield Rewrite
-│       ├── issue-52/                  # OpenWiki Private Vault Setup & Native Notion-to-OKF Synthesis
+│       ├── issue-52/                  # OpenWiki Private Vault Setup & Native Markdown-to-OKF Synthesis
 │       ├── issue-54/                  # HNSW Vector Index Migration & Integration Test
-│       └── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
+│       ├── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
+│       └── issue-59/                  # PRJ226 v4.1.1 Edge Stack Hardening & Strict Dev/Prod Isolation
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts
@@ -57,7 +59,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   └── localTest.ts                   # v4.1 Offline integration test harness (22 tests)
 ├── migrations/                        # Cloudflare D1 SQL Migrations
 │   ├── 0001_init.sql                  # [Historical] Initial schema
-│   └── 0002_v4_edge_stack.sql         # [Active] D1 SQLite + FTS5 + Triggers schema
+│   ├── 0002_v4_edge_stack.sql         # [Historical] D1 SQLite + FTS5 initial schema
+│   └── 0003_v4_1_1_edge_patches.sql   # [Active] System state, inbox logs, deferred queues schema
 └── src/                               # TypeScript application source code
     ├── index.ts                       # Hono entrypoint & routing initialization
     ├── config.ts                      # Cloudflare Workers environment bindings & type contracts
@@ -69,7 +72,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   ├── hybridSearch.ts            # RRF (Reciprocal Rank Fusion) hybrid search engine
     │   └── fetchUtils.ts              # Resilient fetchWithRetry helper
     ├── indexers/
-    │   └── vaultIndexer.ts            # GitHub Push Webhook handler (edge cache indexer)
+    │   ├── vaultIndexer.ts            # GitHub Push Webhook handler (edge cache indexer)
+    │   └── reconciler.ts              # GitHub webhook reconciliation cron trigger
     ├── sensors/
     │   └── telegramWebhook.ts         # Telegram webhook receiver (Whisper AI + KV 4s debounce)
     ├── governance/
