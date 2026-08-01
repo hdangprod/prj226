@@ -4,7 +4,7 @@
 
 ### A. Standard Flow (Features, Major Refactors, Complex Fixes)
 1. **Create Issue**: Use `gh issue create` with Title & 5-W Description.
-2. **Checkout Branch**: Dedicated branch from `main` named `issue-[ID]-[short-description]` (e.g. `issue-28/optimize-notion`). Do NOT code directly on `main`.
+2. **Checkout Branch**: Dedicated branch from `main` named `issue-[ID]-[short-description]` (e.g. `issue-56/optimize-edge-sync`). Do NOT code directly on `main`.
 3. **Plan & Archive Directory Setup**:
    - Create plan directory at `docs/plans/issue-[ID]/`.
    - Save initial plan at `docs/plans/issue-[ID]/plan.md`. Wait for explicit user approval before coding.

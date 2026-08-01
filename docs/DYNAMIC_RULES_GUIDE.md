@@ -12,10 +12,9 @@ To prevent context window saturation and token waste, rule files are loaded dyna
 .agents/
 ├── rules/                       <-- [PURE DATA] Raw Markdown rule files
 │   ├── github-workflow.md
+│   ├── database-isolation.md
 │   ├── centralized-messages.md
-│   ├── notion-limits.md
-│   ├── redis-state-rules.md
-│   └── telegram-limits-rules.md
+│   └── telegram-limits.md
 ├── rules-manifest.json          <-- [SINGLE SOURCE OF TRUTH] Mapping manifest
 ├── scripts/
 │   ├── rule-engine.js           <-- [CORE ENGINE] Evaluates inputs and outputs rules
@@ -54,12 +53,12 @@ node .agents/scripts/add-rule.js --id <rule-id> --keywords <keyword1,keyword2> -
 #### Example:
 
 ```bash
-node .agents/scripts/add-rule.js --id notion-schema --keywords notion,schema,database --paths "src/tools/notion/**"
+node .agents/scripts/add-rule.js --id db-schema --keywords database,d1,schema --paths "src/tools/d1Client.ts"
 ```
 
 #### Automated Actions Performed by the CLI:
 
-1. Generates boilerplate file: `.agents/rules/notion-schema-rules.md`
+1. Generates boilerplate file: `.agents/rules/db-schema-rules.md`
 2. Appends the exact schema entry into `rules-manifest.json`
 3. Validates JSON syntax and confirms file creation
 
@@ -130,7 +129,7 @@ Run these diagnostic commands to verify system integrity:
 
 | Diagnostic Task | Command | Expected Output |
 |---|---|---|
-| **Verify Path Matcher** | `node .agents/scripts/rule-engine.js --path src/tools/notionClient.ts` | Displays `github-workflow` (always_on) + `notion-limits` (path match) |
+| **Verify Path Matcher** | `node .agents/scripts/rule-engine.js --path src/constants/messages.ts` | Displays `github-workflow` (always_on) + `centralized-messages` (path match) |
 | **Verify Keyword Matcher** | `node .agents/scripts/rule-engine.js --keyword telegram` | Displays `github-workflow` (always_on) + `telegram-limits` (keyword match) |
 | **Manifest Audit** | `node .agents/scripts/add-rule.js --verify` | Confirms all rules in `.agents/rules/` are indexed |
 | **Always-On Test** | `node .agents/scripts/rule-engine.js --path src/index.ts` | Displays only `github-workflow` (always_on) |

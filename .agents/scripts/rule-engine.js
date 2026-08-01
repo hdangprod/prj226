@@ -16,7 +16,14 @@
 
 const fs = require('fs');
 const path = require('path');
-const { minimatch } = require('minimatch');
+// Simple zero-dependency glob matcher replacement for minimatch
+function simpleGlobMatch(str, pattern) {
+  const regexStr = '^' + pattern
+    .replace(/\./g, '\\.')
+    .replace(/\*\*/g, '.*')
+    .replace(/\*/g, '[^/]*') + '$';
+  return new RegExp(regexStr).test(str);
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -64,7 +71,7 @@ Options:
   --help, -h             Show this help message
 
 Examples:
-  node rule-engine.js --path src/tools/notionClient.ts
+  node rule-engine.js --path src/tools/d1Client.ts
   node rule-engine.js --keyword telegram
   node rule-engine.js --path src/tools/redis/client.ts --keyword soft_lock
 `);
@@ -96,7 +103,7 @@ function matchesPath(rule, inputPaths) {
     // Normalize: strip leading ./ or / to get a relative path
     const normalized = inputPath.replace(/^\.\//, '').replace(/^\//, '');
     return rule.match_paths.some(glob =>
-      minimatch(normalized, glob, { dot: true })
+      simpleGlobMatch(normalized, glob)
     );
   });
 }

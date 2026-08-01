@@ -16,20 +16,6 @@
       "match_paths": []
     },
     {
-      "id": "notion-limits",
-      "description": "Notion API rate limiting and throttling rules",
-      "file": ".agents/rules/notion-limits.md",
-      "always_on": false,
-      "match_keywords": [
-        "notion",
-        "rate_limit"
-      ],
-      "match_paths": [
-        "src/tools/notion*",
-        "src/tools/notion*/**"
-      ]
-    },
-    {
       "id": "centralized-messages",
       "description": "UI/Bot text message constants policy",
       "file": ".agents/rules/centralized-messages.md",
@@ -43,24 +29,9 @@
       ]
     },
     {
-      "id": "redis-state",
-      "description": "Redis state management and lock coordination rules",
-      "file": ".agents/rules/redis-state-rules.md",
-      "always_on": false,
-      "match_keywords": [
-        "redis",
-        "soft_lock",
-        "hard_lock"
-      ],
-      "match_paths": [
-        "src/tools/redis/**",
-        "src/governance/**"
-      ]
-    },
-    {
       "id": "telegram-limits",
       "description": "Telegram API formatting and message limits",
-      "file": ".agents/rules/telegram-limits-rules.md",
+      "file": ".agents/rules/telegram-limits.md",
       "always_on": false,
       "match_keywords": [
         "telegram",
@@ -71,6 +42,20 @@
         "src/sensors/**",
         "src/tools/telegram**"
       ]
+    },
+    {
+      "id": "database-isolation",
+      "description": "Strict isolation between test D1 (prj226-brain) and live production D1 (prj226-brain-prod)",
+      "file": ".agents/rules/database-isolation.md",
+      "always_on": true,
+      "match_keywords": [
+        "d1",
+        "database",
+        "prod",
+        "test",
+        "migration"
+      ],
+      "match_paths": []
     }
   ]
 }
