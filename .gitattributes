@@ -1,0 +1,8 @@
+# PRJ226 Git Attributes for Mobile Obsidian & Cloudflare Worker Sync
+
+# Force LF line endings across mobile (iOS/Android) and Workers
+*.md text eol=lf
+
+# Disjoint Inbox Directory - Always union merge capture index files if modified concurrently
+inbox/*.md merge=union
+tasks/*.md merge=union
