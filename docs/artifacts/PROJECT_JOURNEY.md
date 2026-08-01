@@ -15,26 +15,26 @@ ai_policy: "human_reviewer_only"
 
 ## 1. Project Overview & Core Vision
 
-The system is a serverless conversational assistant built with **TypeScript (v5.3.3)** and **Node.js (v20+)**. It bridges Telegram natural language inputs (text & voice) with a **Notion Second Brain** (3-tier PARA structure) using **Firestore** as a stateless serverless buffer and **Gemini AI** for intent classification and natural language parsing.
+The system is a serverless conversational assistant built with **TypeScript (v5.3.3)** and **Node.js (v20+)**. It bridges Telegram natural language inputs (text & voice) with a **Obsidian Second Brain** (3-tier PARA structure) using **D1/KV** as a stateless serverless buffer and **Gemini AI** for intent classification and natural language parsing.
 
 ---
 
 ## 2. Chronological Milestones
 
 ### Milestone 1: Core Infrastructure & Pipeline Setup
-- **Goal**: Establish serverless deployment pipeline on GCP Cloud Run, integrate Gemini NLP, and connect Telegram webhook to Notion SDK.
+- **Goal**: Establish serverless deployment pipeline on Cloudflare Workers, integrate Gemini NLP, and connect Telegram webhook to Obsidian SDK.
 - **Key Outcomes**:
-  - Successfully deployed HTTP webhook server on GCP Cloud Run.
+  - Successfully deployed HTTP webhook server on Cloudflare Workers.
   - Connected Gemini LITE model for single-turn intent extraction and natural language task capture.
-  - Implemented Callout blocks (💡 context descriptions) injected into Notion task body pages.
-  - Integrated GCP Firestore Native Mode as an asynchronous session state buffer.
+  - Implemented Callout blocks (💡 context descriptions) injected into Obsidian task body pages.
+  - Integrated GCP D1/KV Native Mode as an asynchronous session state buffer.
 
 ### Milestone 2: 4-Layer Closed-Loop Architecture & Agent Skills Refactoring
 - **Goal**: Decouple monolithic handlers into a modular AI-Native 4-Layer Architecture (`sensors`, `governance`, `tools`, `skills`).
 - **Key Outcomes**:
   - Created `src/sensors/` for Telegram webhook intake and Gemini-based voice note transcription (`voiceProcessor.ts`).
   - Created `src/governance/` for probabilistic intent evaluation (`intentRouter.ts`) with HITL fallback (`hitlManager.ts`) for confidence < 95%.
-  - Created `src/tools/` encapsulating deterministic API clients (`notionClient`, `firestoreClient`, `googleClient`, `telegramClient`).
+  - Created `src/tools/` encapsulating deterministic API clients (`obsidianClient`, `d1Client`, `googleClient`, `telegramClient`).
   - Created `src/skills/` introducing stateful workflow skills (`taskCaptureSkill`, `weeklyPlanningSkill`).
   - Implemented rate-limiting throttles (`delay(350)`) and HTML message escaping.
 
@@ -49,13 +49,13 @@ The system is a serverless conversational assistant built with **TypeScript (v5.
 
 ## 3. Major Architectural Decisions & Learnings
 
-### Decision 1: Stateless Serverless State Buffer (GCP Firestore Native Mode)
-- **Problem**: Cloud Functions and Cloud Run containers are ephemeral and stateless. In-memory `Map` or RAM caches lost state between webhooks.
-- **Solution**: Adopted GCP Firestore in Native Mode (`asia-southeast1`). Stores temporary HITL sessions (5-minute TTL) and weekly planning drafts (15-minute TTL).
+### Decision 1: Stateless Serverless State Buffer (GCP D1/KV Native Mode)
+- **Problem**: Cloud Functions and Cloudflare Workers containers are ephemeral and stateless. In-memory `Map` or RAM caches lost state between webhooks.
+- **Solution**: Adopted GCP D1/KV in Native Mode (`asia-southeast1`). Stores temporary HITL sessions (5-minute TTL) and weekly planning drafts (15-minute TTL).
 
-### Decision 2: 3 rps Notion Rate-Limiting Guardrails
-- **Problem**: Bulk task creation (e.g. weekly schedule sync) hit HTTP 429 Rate Limits from Notion API when using concurrent `Promise.all()`.
-- **Solution**: Enforced sequential `for...of` iteration with mandatory `delay(350)` throttles across all bulk Notion write calls.
+### Decision 2: 3 rps Obsidian Rate-Limiting Guardrails
+- **Problem**: Bulk task creation (e.g. weekly schedule sync) hit HTTP 429 Rate Limits from Obsidian API when using concurrent `Promise.all()`.
+- **Solution**: Enforced sequential `for...of` iteration with mandatory `delay(350)` throttles across all bulk Obsidian write calls.
 
 ### Decision 3: Telegram Parse Mode (HTML vs Markdown)
 - **Problem**: Telegram Markdown mode generated HTTP 400 Bad Request errors whenever task names contained unescaped characters (`*`, `_`, `[`).

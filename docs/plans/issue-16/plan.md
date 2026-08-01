@@ -11,7 +11,7 @@ Khi người dùng nhận ra một task không thể hoàn thành trong ngày h�
 **Workflow mong đợi:**
 1. Lấy dữ liệu của task cũ (Tên, checklist, Project, Area, v.v.).
 2. Kiểm tra những subtask/checklist nào chưa hoàn thành.
-3. Tạo một Task MỚI (Clone) trên Notion:
+3. Tạo một Task MỚI (Clone) trên Obsidian:
    - Tên và thuộc tính giống hệt task cũ.
    - Checklist: **Giữ nguyên toàn bộ checklist (cả mục đã check và chưa check) để Sếp dễ dàng review lại.**
    - Estimate (Thời gian dự kiến): **Sẽ hỏi người dùng đã dùng bao nhiêu tiếng. Thời gian còn lại = Estimate cũ - Thời gian đã dùng. Nếu người dùng bỏ qua (skip), mặc định chia đôi (Estimate / 2).**
@@ -25,7 +25,7 @@ Khi người dùng nhận ra một task không thể hoàn thành trong ngày h�
 
 ## Proposed Changes
 
-### Component 1: `src/notion/client.ts`
+### Component 1: `src/obsidian/client.ts`
 - Cập nhật thêm tính năng đọc Checklist từ task cũ. *(Đã có hàm `getTaskPage` và `getTaskChecklist`, cần tái sử dụng).*
 - Bổ sung/cập nhật `createTask` để hỗ trợ truyền vào danh sách checklist tuỳ chọn (thay vì chỉ dùng `session.taskInput.checklist`).
 - Thêm `getOrCreateDailyLog(dateStr)` với tham số là `ngày mai`.
@@ -53,7 +53,7 @@ Khi người dùng nhận ra một task không thể hoàn thành trong ngày h�
 ## User Review Required
 
 > [!IMPORTANT]
-> **Notion Database Status:** Thuộc tính `Status` của bảng Tasks trên Notion của Sếp phải đảm bảo có sẵn tuỳ chọn **"Deferred"** (hoặc nếu Sếp muốn dùng "Archived" thay thế thì xin hãy báo cho tôi biết). Mặc định tôi sẽ dùng chuỗi `"Deferred"`.
+> **Obsidian Database Status:** Thuộc tính `Status` của bảng Tasks trên Obsidian của Sếp phải đảm bảo có sẵn tuỳ chọn **"Deferred"** (hoặc nếu Sếp muốn dùng "Archived" thay thế thì xin hãy báo cho tôi biết). Mặc định tôi sẽ dùng chuỗi `"Deferred"`.
 
 ## Open Questions
 *(Đã được giải đáp)*
@@ -65,7 +65,7 @@ Khi người dùng nhận ra một task không thể hoàn thành trong ngày h�
 ## Verification Plan (DoD)
 
 ### 1. Code chạy đúng spec, không bug
-- Nút Defer hoạt động, tự động clone task sang ngày mai trên Notion, tính lại estimate, xoá bỏ các checklist đã tích.
+- Nút Defer hoạt động, tự động clone task sang ngày mai trên Obsidian, tính lại estimate, xoá bỏ các checklist đã tích.
 - Status task cũ được cập nhật thành Deferred.
 
 ### 2. Unit Test bao phủ

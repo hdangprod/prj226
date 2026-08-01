@@ -5,7 +5,7 @@
 
 ## 2. 💡 Solution Architecture
 - Formatted output using Telegram HTML parse mode (`<b>`, `<i>`, `<code>`).
-- Added Inline Keyboard Action Buttons (`[✅ Complete]`, `[⏳ Defer]`, `[📂 Open in Notion]`) for every task entry.
+- Added Inline Keyboard Action Buttons (`[✅ Complete]`, `[⏳ Defer]`, `[📂 Open in Obsidian]`) for every task entry.
 
 ## 3. 🛠️ Key Files Touched
 - `src/tools/telegramClient.ts`

@@ -7,7 +7,7 @@ Hệ thống hiện tại (V2.0) đang phụ thuộc hoàn toàn vào **Gemini 3
 ## 💡 Giải pháp & Tại sao chọn giải pháp này (The Trade-offs)
 Chúng ta sẽ triển khai cơ chế **Asymmetric Hybrid Router** kết hợp với **Self-Correction & Escalation**.
 - **Giải pháp:** 
-  1. Xây dựng **Bộ đếm (Quota Tracker)** bằng Firestore để lưu trữ số lượt gọi PRO hàng ngày. Khi chạm mốc cảnh báo (15/20), bot sẽ báo động. Khi chạm trần (20/20), hệ thống sẽ ngắt hoàn toàn PRO và chặn ở lớp Router.
+  1. Xây dựng **Bộ đếm (Quota Tracker)** bằng D1/KV để lưu trữ số lượt gọi PRO hàng ngày. Khi chạm mốc cảnh báo (15/20), bot sẽ báo động. Khi chạm trần (20/20), hệ thống sẽ ngắt hoàn toàn PRO và chặn ở lớp Router.
   2. Áp dụng chiến lược **Lite-First**: Gọi mô hình 3.1 Flash Lite trước cho `/weekly_planning`. Nếu LITE trả về cấu trúc đúng và lịch không bị chồng chéo (dựa vào hàm *Validator* code cứng), ta giữ kết quả này (0 lượt gọi PRO).
   3. Nếu LITE xếp lịch sai, hệ thống mới **Escalate (Nâng cấp)** lên PRO để tối ưu.
 - **Trade-offs:** 
@@ -21,13 +21,13 @@ Chúng ta sẽ triển khai cơ chế **Asymmetric Hybrid Router** kết hợp v
 - `src/router.ts`: Cập nhật UI Telegram để hiển thị chỉ báo `🟢 LITE Optimized`, `⭐ PRO Optimized` hoặc `⚡ LITE Fallback` kèm theo cảnh báo quota (khi $\ge 15$).
 
 ## 📈 Kế hoạch Scale-up tương lai (Future Proofing)
-Việc sử dụng Firestore làm trung tâm giám sát số lượng API Call sẽ là tiền đề vững chắc nếu sau này chúng ta:
+Việc sử dụng D1/KV làm trung tâm giám sát số lượng API Call sẽ là tiền đề vững chắc nếu sau này chúng ta:
 1. Hỗ trợ **Multi-user** (mỗi User ID sẽ có một quota riêng biệt thay vì dùng chung 1 API Key).
 2. Tích hợp **Multi-Key Pool** (khi quota của Key A cạn, tự động trỏ `stateManager` sang Key B).
 3. Cho phép Admin dễ dàng mở rộng và tắt/bật tính năng trực tiếp từ Console.
 
 ## ✅ Tiêu chí nghiệm thu (Definition of Done)
-- [ ] Tính năng chạy thành công với một prompt `/weekly_planning` đơn giản, dùng LITE hoàn toàn và không thay đổi đếm PRO trên Firestore.
+- [ ] Tính năng chạy thành công với một prompt `/weekly_planning` đơn giản, dùng LITE hoàn toàn và không thay đổi đếm PRO trên D1/KV.
 - [ ] Tính năng leo cấp (escalate) thành công lên PRO nếu gửi một tập công việc phức tạp/xung đột.
 - [ ] Chạy thành công lệnh `npm run build` không lỗi type.
-- [ ] Hệ thống hiện cảnh báo khi mô phỏng số cuộc gọi $\ge 15$ trong Firestore.
+- [ ] Hệ thống hiện cảnh báo khi mô phỏng số cuộc gọi $\ge 15$ trong D1/KV.

@@ -13,16 +13,16 @@ Cập nhật interface để truyền được tên Project chưa tồn tại t�
 - Bổ sung trường `rawProjectName: string` vào interface `ScheduledTask`.
 - Ở Phase 3 (Resolve project IDs), gán `rawProjectName: t.properties.Project` để truyền đi kể cả khi `findProjectByName` không tìm thấy dự án trong database.
 
-### 2. Notion & Task Service Layer
+### 2. Obsidian & Task Service Layer
 Cập nhật logic tự động tạo Project mới và liên kết Daily Log khi bulk tạo tasks.
 #### [MODIFY] [taskService.ts](file:///Users/dangnguyen/Desktop/PRJ226/src/services/taskService.ts)
 - Trong hàm `bulkCreateTasksV2`:
   - Khởi tạo bộ nhớ tạm (cache) cho các project mới tạo và daily log để tránh gọi API trùng lặp trong cùng 1 vòng lặp.
-  - Nếu task có `rawProjectName` mà chưa có `projectId`, gọi `createProject(rawProjectName)` để tạo Project mới trên Notion, lưu ID lại và map vào `projectId`.
+  - Nếu task có `rawProjectName` mà chưa có `projectId`, gọi `createProject(rawProjectName)` để tạo Project mới trên Obsidian, lưu ID lại và map vào `projectId`.
   - Từ `task.Date.start`, lấy ra chuỗi ngày (YYYY-MM-DD), gọi `getOrCreateDailyLog(dateStr)` để lấy `dailyLogId`.
   - Truyền cả `projectId` và `dailyLogId` vào `createTaskV2`.
 
-#### [MODIFY] [client.ts (Notion)](file:///Users/dangnguyen/Desktop/PRJ226/src/notion/client.ts)
+#### [MODIFY] [client.ts (Obsidian)](file:///Users/dangnguyen/Desktop/PRJ226/src/obsidian/client.ts)
 - Trong hàm `createTaskV2`:
   - Sửa logic tiền tố task (Task Prefix). Đổi từ `ProjectName_T{count}: ` thành `[{ProjectName}] ` theo đúng format yêu cầu.
 
@@ -43,7 +43,7 @@ Cập nhật giao diện trả về Telegram theo thiết kế mock-up của Use
 ### Manual Verification
 - Chạy lệnh `/weekly_planning` với đoạn prompt được cung cấp.
 - Kiểm tra tin nhắn Preview hiển thị đúng format nhóm theo Project.
-- Nhấn Xác nhận và kiểm tra trong Notion:
+- Nhấn Xác nhận và kiểm tra trong Obsidian:
   1. Project mới (`PRJ_Person_1`) được tạo.
   2. Các task được link vào đúng Project.
   3. Cột `Daily_Task` (Daily Log) được link đúng vào ngày tương ứng.

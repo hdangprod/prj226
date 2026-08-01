@@ -9,7 +9,7 @@ Implement a strict, vendor-agnostic Dynamic Rule Loading Engine for PRJ226 using
 > - **Manifest (`.agents/rules-manifest.json`)**: Single Source of Truth mapping rule IDs to keywords, glob path patterns, and file paths with support for `always_on: true` global governance.
 > - **Execution Engine (`.agents/scripts/rule-engine.js`)**: Evaluates `--path` and `--keyword` flags dynamically and outputs concatenated Markdown rules.
 > - **Creation Enforcer (`.agents/scripts/add-rule.js`)**: CLI enforcing rule creation SOPs and manifest auditing (`--verify`).
-> - **Absorbed Native Rules**: Stripped native Antigravity frontmatter (`trigger: model_decision`, `trigger: always_on`) from `centralized-messages.md`, `notion-limits.md`, and `github-workflow.md` to make rule files framework-agnostic.
+> - **Absorbed Native Rules**: Stripped native Antigravity frontmatter (`trigger: model_decision`, `trigger: always_on`) from `centralized-messages.md`, `obsidian-limits.md`, and `github-workflow.md` to make rule files framework-agnostic.
 
 ## Proposed Changes
 
@@ -22,7 +22,7 @@ Implement a strict, vendor-agnostic Dynamic Rule Loading Engine for PRJ226 using
 - `[NEW]` `.agents/rules/telegram-limits-rules.md`
 - `[MODIFY]` `.agents/rules/centralized-messages.md`
 - `[MODIFY]` `.agents/rules/github-workflow.md`
-- `[MODIFY]` `.agents/rules/notion-limits.md`
+- `[MODIFY]` `.agents/rules/obsidian-limits.md`
 
 ### System Directives & Documentation Cascade
 - `[MODIFY]` `AGENTS.md`

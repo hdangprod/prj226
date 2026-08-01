@@ -126,12 +126,26 @@ export async function handleGitHubPushWebhook(
       }
     }
 
-    // 4. Process removals
+    // 4. Process removals (Query vector IDs BEFORE deleting D1 records)
     for (const path of removed) {
-      const deletedIds = await d1.deleteNoteChunksByPath(path);
-      if (deletedIds.length > 0) {
-        await deleteVectors(deletedIds, env);
+      const existingChunks = await d1.getChunkHashesByPath(path);
+      const vectorIds = existingChunks.map((c) => c.id);
+
+      if (vectorIds.length > 0) {
+        // Delete from Vectorize in batches of 500
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < vectorIds.length; i += BATCH_SIZE) {
+          const chunkBatch = vectorIds.slice(i, i + BATCH_SIZE);
+          try {
+            await deleteVectors(chunkBatch, env);
+          } catch (err) {
+            console.error(`[Vectorize Clean Error] Staging failed delete IDs for ${path}:`, err);
+            await d1.stageFailedVectorDeletions(chunkBatch.map((id) => ({ vectorId: id, githubPath: path })));
+          }
+        }
       }
+
+      const deletedIds = await d1.deleteNoteChunksByPath(path);
       console.log(JSON.stringify({ event: 'chunks_removed', path, count: deletedIds.length }));
     }
 
@@ -155,6 +169,15 @@ export async function handleGitHubPushWebhook(
       const existingHashMap = new Map(existingHashes.map((h) => [h.id, h.content_hash]));
 
       const vectorsToUpsert: Array<{ id: string; values: number[]; metadata?: Record<string, string> }> = [];
+      const d1ChunksToUpsert: Array<{
+        id: string;
+        githubPath: string;
+        chunkIndex: number;
+        title: string | null;
+        content: string;
+        contentHash: string;
+        tags: string | null;
+      }> = [];
 
       for (const chunk of chunks) {
         const contentHash = await computeContentHash(chunk.content, env);
@@ -165,11 +188,16 @@ export async function handleGitHubPushWebhook(
           continue;
         }
 
-        // Generate embedding
-        const embedding = await embedText(chunk.content, env);
+        // Generate embedding (with graceful quota handling)
+        let embedding: number[] | null = null;
+        try {
+          embedding = await embedText(chunk.content, env);
+        } catch (embErr) {
+          console.warn(`[Embedding Quota/Failure] Staging chunk ${chunk.id} for deferred retry:`, embErr);
+          await d1.stagePendingEmbedding(chunk.id, chunk.content, path);
+        }
 
-        // Upsert to D1 cache
-        await d1.upsertNoteChunk({
+        d1ChunksToUpsert.push({
           id: chunk.id,
           githubPath: path,
           chunkIndex: chunk.chunkIndex,
@@ -179,16 +207,23 @@ export async function handleGitHubPushWebhook(
           tags: chunk.tags,
         });
 
-        vectorsToUpsert.push({
-          id: chunk.id,
-          values: embedding,
-          metadata: { path, title: chunk.title || path },
-        });
+        if (embedding) {
+          vectorsToUpsert.push({
+            id: chunk.id,
+            values: embedding,
+            metadata: { path, title: chunk.title || path },
+          });
+        }
 
         chunksProcessed++;
       }
 
-      // Batch upsert vectors
+      // Bulk upsert to D1 cache + FTS5 in a single atomic batch payload
+      if (d1ChunksToUpsert.length > 0) {
+        await d1.bulkUpsertNoteChunksAndFts(d1ChunksToUpsert);
+      }
+
+      // Batch upsert vectors to Cloudflare Vectorize
       if (vectorsToUpsert.length > 0) {
         await upsertVectors(vectorsToUpsert, env);
       }

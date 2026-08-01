@@ -69,8 +69,10 @@ export class LLMRouter {
     const fastProvider = (env.LLM_FAST_PROVIDER || 'google') as Provider;
     const proProvider = (env.LLM_PRO_PROVIDER || 'google') as Provider;
 
-    this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'gemini-2.0-flash-lite', env.LLM_FAST_API_KEY);
-    this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'gemini-2.5-flash', env.LLM_PRO_API_KEY);
+    const apiKey = env.LLM_FAST_API_KEY || env.LLM_PRO_API_KEY || env.GEMINI_API_KEY || '';
+
+    this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'gemini-2.0-flash-lite', env.LLM_FAST_API_KEY || apiKey);
+    this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'gemini-2.5-flash', env.LLM_PRO_API_KEY || apiKey);
   }
 
   /** Fast model: intent routing, task extraction, text parsing */

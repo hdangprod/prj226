@@ -67,3 +67,30 @@ Keep it under 200 words. Use HTML formatting (bold, italic) for Telegram.`;
 
   await sendMessage(chatId, `🌅 <b>Daily Briefing</b>\n\n${briefing}`, env);
 }
+
+export function generateDailyTaskMarkdownSnapshot(
+  tasks: Array<{ id: string; name: string; status: string; priority: string; scheduled_date?: string | null }>
+): string {
+  const dateStr = new Date().toISOString().split('T')[0];
+
+  const header = `---
+type: task_snapshot
+generated_at: ${new Date().toISOString()}
+read_only: true
+---
+> [!WARNING]
+> **READ-ONLY AUTOMATED SNAPSHOT**
+> Edits made directly to this Markdown file inside Obsidian **will not** sync back to Cloudflare D1. 
+> To manage tasks, use Telegram bot commands (\`/task\`, \`/done\`).
+
+# 📅 Daily Task Summary (${dateStr})
+
+`;
+
+  const taskLines = tasks.map((t) => {
+    const check = t.status === 'completed' || t.status === 'done' ? 'x' : ' ';
+    return `- [${check}] **[${t.priority.toUpperCase()}]** ${t.name} \`id:${t.id}\``;
+  }).join('\n');
+
+  return header + (taskLines || '*No active tasks found.*') + '\n';
+}

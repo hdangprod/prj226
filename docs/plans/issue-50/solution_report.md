@@ -3,7 +3,7 @@
 ## 5-W Implementation & Completion Report
 
 ### 1. Context & Problem
-Managing daily habits, deep work blocks, and knowledge notes created cognitive overload. The existing GCP Cloud Run + Firestore + Upstash Redis stack incurred cost overhead and lacked a provider-agnostic LLM layer and deep offline knowledge synthesis.
+Managing daily habits, deep work blocks, and knowledge notes created cognitive overload. The existing Cloudflare Workers + D1/KV + Upstash Redis stack incurred cost overhead and lacked a provider-agnostic LLM layer and deep offline knowledge synthesis.
 
 ### 2. Solution & Architecture (100% $0 Free Tier Guaranteed)
 Rebuilt PRJ226 from scratch into a zero-infrastructure-cost dual-speed architecture:
@@ -14,7 +14,7 @@ Rebuilt PRJ226 from scratch into a zero-infrastructure-cost dual-speed architect
 - **Skills**: 6 PRD intent handlers (`dailyFocusSkill`, `taskCaptureSkill`, `rescheduleSkill`, `knowledgeSearchSkill`, `rescueModeSkill`, `sessionHandoffSkill`).
 
 ### 3. Key Architecture Refinements (Trap Remediations)
-1. **Trap 1 Fix (No Notion Polling)**: Dropped Notion Fast-Sync polling to eliminate rate limits. Notion syncs exclusively via Cold Path (OpenWiki).
+1. **Trap 1 Fix (No Obsidian Polling)**: Dropped Obsidian Fast-Sync polling to eliminate rate limits. Obsidian syncs exclusively via Cold Path (OpenWiki).
 2. **Trap 2 Fix (Generic JSONB RPC)**: Replaced hardcoded stored procedures with generic `process_telegram_action(p_intent, p_payload)`.
 3. **Trap 3 Fix (SHA-256 Token Optimization)**: Added content hashing to `index-vault-to-neon.js` to skip unchanged `.md` files and prevent free tier quota exhaustion.
 4. **Trap 4 Fix (100% $0 Free Tier KV Stack)**: Replaced paid Durable Objects and Queues with Cloudflare KV and `ctx.waitUntil()` non-blocking execution.

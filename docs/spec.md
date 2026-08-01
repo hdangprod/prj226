@@ -12,20 +12,29 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 
 ## Tech Stack
 - **Language**: TypeScript (v5.3.3)
-- **Runtime**: Cloudflare Workers (Hono framework v4.7.0 — 100% Free Tier)
-- **Database & Cache**: Cloudflare D1 (`DB` - SQLite at Edge for metadata, tasks, working memory, note_chunks_cache, FTS5)
-- **Vector Search**: Cloudflare Vectorize (`VECTORIZE` - 768-dim cosine index for note chunks)
-- **AI & Audio Engine**: Cloudflare Workers AI (`AI` - `@cf/baai/bge-base-en-v1.5` for 768-dim embeddings, `@cf/openai/whisper-large-v3-turbo` for voice transcription)
-- **LLM Synthesis & Routing**: Vercel AI SDK (`ai` + `@ai-sdk/google`) for model-agnostic intent classification and response generation
-- **Queuing & Debounce**: Cloudflare KV (`SESSION_KV`) 4-second sliding window buffer + `ctx.waitUntil()` async execution
-- **Git Sync Engine**: GitHub Git Data API (`POST /git/blobs` -> `POST /git/trees` -> `POST /git/commits` -> `PATCH /git/refs`) for batched commits (5-min Cron Trigger)
-- **Human Interface**: Obsidian Local Vault (Markdown `.md`) + Telegram Bot (`liam_second_brain_bot`)
+## Environments & Production Stack (Cloudflare D1, Vectorize & KV)
+- **Staging / Test Environment (Default / Dev)**:
+  - Worker Name: `prj226-liam-dev`
+  - D1 Database: `prj226-brain-dev` (`1763f575-705f-4822-a6fe-628a7f8fa602`)
+  - Vectorize Index: `prj226-wiki-dev`
+  - KV Namespace: `ddb9e431d19b4e33bb7282dee39b3f9f`
+  - GitHub Vault: `hdangprod/hdangprod_wiki_dev`
+- **Production Environment (`--env production`)**:
+  - Worker Name: `prj226-liam-prod`
+  - D1 Database: `prj226-brain-prod` (`7923f482-c7cb-44a3-a371-8aadd012cfd5`)
+  - Vectorize Index: `prj226-wiki-prod`
+  - KV Namespace: `430f495e8bbb4041bed2b7be90fee78f`
+  - GitHub Vault: `hdangprod/hdangprod_wiki_prod`
 
-## Database Schema (Cloudflare D1: `migrations/0002_v4_edge_stack.sql`)
+## Database Schema (Cloudflare D1: `migrations/0002_v4_edge_stack.sql` & `migrations/0003_v4_1_1_edge_patches.sql`)
 - **`processed_updates`**: Global idempotency table (`update_id` BIGINT PK).
+- **`raw_inbox_logs`**: Durable synchronous Telegram update log (`update_id`, `payload`, `status`, `error`, `created_at`).
 - **`pending_captures`**: Staging queue for rapid Telegram captures (`id`, `content`, `source`, `file_path`, `created_at`).
+- **`pending_embeddings`**: Staging queue for Workers AI quota-deferred chunk embeddings (`chunk_id`, `content`, `github_path`, `status`, `created_at`).
+- **`pending_vector_deletions`**: Staging queue for retrying failed Vectorize deletes (`id`, `vector_id`, `github_path`, `created_at`).
+- **`system_state`**: Key-value table tracking `last_indexed_commit_sha` for the reconciliation cron (`key`, `value`, `updated_at`).
 - **`note_chunks_cache`**: Read-through Markdown content & chunk metadata cache (`id`, `github_path`, `chunk_index`, `title`, `content`, `content_hash`, `tags`, `updated_at`).
-- **`note_chunks_fts`**: FTS5 Virtual Table automatically synchronized with `note_chunks_cache` via triggers (`chunks_ai`, `chunks_ad`, `chunks_au`).
+- **`note_chunks_fts`**: FTS5 Virtual Table for full-text BM25 search (batch populated via `env.DB.batch()` to eliminate trigger lock contention).
 - **`tasks`**: Tasks with dependency graph, scheduled dates, and priorities (`id`, `name`, `status`, `priority`, `estimate_hours`, `scheduled_date`, `depends_on`, `description`).
 - **`working_memory`**: Session state snapshots (`id`, `last_action`, `doing`, `next_action`, `metadata`, `snapshot_at`).
 
@@ -61,7 +70,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `intentRouter.ts`: Evaluates intent across 6 categories using LLMRouter. Confidence ≥ 95% dispatches to Skill. Confidence < 95% auto-captures thought to `pending_captures` AND presents HITL clarification keyboard with Obsidian deep link.
 
 ### 3. LLM Router & Embeddings (`src/router/`, `src/lib/`)
-- `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`).
+- `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`), supporting a single unified API key (`GEMINI_API_KEY`, `LLM_FAST_API_KEY`, or `LLM_PRO_API_KEY`) for both models.
 - `embeddings.ts`: Workers AI `@cf/baai/bge-base-en-v1.5` 768-dim embedding generator + SHA-256 content hash namespacing.
 - `chunking.ts`: Markdown H2 heading chunker.
 - `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3).

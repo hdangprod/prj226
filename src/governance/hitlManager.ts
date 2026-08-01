@@ -2,8 +2,7 @@
  * PRJ226 v3.0: HITL Manager (Cloudflare KV Backed — 100% Free Tier)
  *
  * Manages Human-In-The-Loop session state for multi-turn interactions.
- * Replaces: Durable Objects & Firestore
- * Uses: Cloudflare KV (SESSION_KV binding) with 300s expiration TTL
+ * Pure Edge KV implementation (SESSION_KV) with 300s expiration TTL
  */
 
 import type { Env } from '../config';

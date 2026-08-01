@@ -1,4 +1,4 @@
-name = "prj226-liam"
+name = "prj226-liam-dev"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
@@ -6,25 +6,25 @@ compatibility_flags = ["nodejs_compat"]
 [build]
 command = ""
 
-# ─── Cloudflare D1 Database (5GB free, edge SQLite) ───
+# ─── Cloudflare D1 Database (Development: prj226-brain-dev) ───
 [[d1_databases]]
 binding = "DB"
-database_name = "prj226-brain"
-database_id = "<YOUR_D1_ID>"
+database_name = "prj226-brain-dev"
+database_id = "1763f575-705f-4822-a6fe-628a7f8fa602"
 
-# ─── Cloudflare Vectorize (768-dim cosine, 30M dims free) ───
+# ─── Cloudflare Vectorize (Development: prj226-wiki-dev) ───
 [[vectorize]]
 binding = "VECTORIZE"
-index_name = "prj226-wiki"
+index_name = "prj226-wiki-dev"
 
 # ─── Cloudflare Workers AI (Whisper + Embeddings) ───
 [ai]
 binding = "AI"
 
-# ─── Cloudflare KV (Debounce Buffer) ───
+# ─── Cloudflare KV (Development: SESSION_KV_DEV) ───
 [[kv_namespaces]]
 binding = "SESSION_KV"
-id = "bf8509640dfa4d0fa87dd0a1d945c44a"
+id = "ddb9e431d19b4e33bb7282dee39b3f9f"
 
 # ─── Cron Triggers ───
 [triggers]
@@ -32,10 +32,10 @@ crons = [
   "*/5 * * * *"    # Flush pending_captures to GitHub every 5 min
 ]
 
-# ─── Environment Variables (non-secret) ───
+# ─── Environment Variables (Development: hdangprod_wiki_dev) ───
 [vars]
 GITHUB_OWNER = "hdangprod"
-GITHUB_REPO = "hdangprod_wiki"
+GITHUB_REPO = "hdangprod_wiki_dev"
 EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5"
 EMBEDDING_DIMENSIONS = "768"
 TELEGRAM_BOT_USERNAME = "liam_second_brain_bot"
@@ -50,5 +50,42 @@ LLM_PRO_MODEL = "gemini-3.6-flash"
 # TELEGRAM_CHAT_ID
 # GITHUB_TOKEN             (GitHub PAT for Git Data API)
 # GITHUB_WEBHOOK_SECRET    (HMAC-SHA256 for push webhooks)
-# LLM_FAST_API_KEY         (Google Gemini API key)
-# LLM_PRO_API_KEY          (Google Gemini API key)
+# LLM_FAST_API_KEY / GEMINI_API_KEY
+# LLM_PRO_API_KEY / GEMINI_API_KEY
+
+# ─── PRODUCTION ENVIRONMENT (prj226-liam-prod) ─────────────────────────────
+[env.production]
+name = "prj226-liam-prod"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "prj226-brain-prod"
+database_id = "7923f482-c7cb-44a3-a371-8aadd012cfd5"
+
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "prj226-wiki-prod"
+
+[env.production.ai]
+binding = "AI"
+
+[[env.production.kv_namespaces]]
+binding = "SESSION_KV"
+id = "430f495e8bbb4041bed2b7be90fee78f"
+
+[env.production.triggers]
+crons = [
+  "*/5 * * * *"
+]
+
+[env.production.vars]
+GITHUB_OWNER = "hdangprod"
+GITHUB_REPO = "hdangprod_wiki_prod"
+EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5"
+EMBEDDING_DIMENSIONS = "768"
+TELEGRAM_BOT_USERNAME = "liam_second_brain_bot"
+LLM_FAST_PROVIDER = "google"
+LLM_FAST_MODEL = "gemini-3.5-flash-lite"
+LLM_PRO_PROVIDER = "google"
+LLM_PRO_MODEL = "gemini-3.6-flash"
+

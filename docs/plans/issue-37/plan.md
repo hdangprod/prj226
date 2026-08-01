@@ -10,7 +10,7 @@ Align PRJ226 with the 5-Layer AIOS (Agentic Operating System) Framework, establi
 > - **Layer 2: Memory & Context** ([`docs/sitemap.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/sitemap.md), [`docs/spec.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/spec.md), [`docs/agents/context.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/agents/context.md)): System specs, DB schemas, and lazy-loading sitemap index.
 > - **Layer 3: Workflows & SOPs** ([`.agents/rules/github-workflow.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/rules/github-workflow.md), [`.agents/workflows/`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/)): SOPs for Git/PRs, bug hunting, and GCP deployments.
 > - **Layer 4: Modular Skills** ([`.agents/skills/orchestrator/`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/skills/orchestrator/), [`src/skills/`](file:///Users/dangnguyen/Desktop/PRJ226/src/skills/)): Multi-agent orchestration, task capture, weekly planning.
-> - **Layer 5: Tools & Integrations** ([`src/tools/`](file:///Users/dangnguyen/Desktop/PRJ226/src/tools/)): Deterministic API clients (Notion, Firestore, Google, Telegram).
+> - **Layer 5: Tools & Integrations** ([`src/tools/`](file:///Users/dangnguyen/Desktop/PRJ226/src/tools/)): Deterministic API clients (Obsidian, D1/KV, Google, Telegram).
 
 > [!CAUTION]
 > **Mandatory 3-Step Documentation Cascade Rule**:

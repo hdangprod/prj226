@@ -1,12 +1,12 @@
 # Implementation Plan - Issue #56: PRJ226 v4.1 Obsidian Edge Stack Migration
 
 ## Goal
-Migrate PRJ226 from Notion API + Neon Postgres to pure Cloudflare Edge Stack (D1 + Vectorize + Workers AI) with Obsidian local vault as Single Source of Truth, achieving $0/month infrastructure cost, sub-25ms hot path retrieval, and zero merge conflicts.
+Migrate PRJ226 from Obsidian API + Neon Postgres to pure Cloudflare Edge Stack (D1 + Vectorize + Workers AI) with Obsidian local vault as Single Source of Truth, achieving $0/month infrastructure cost, sub-25ms hot path retrieval, and zero merge conflicts.
 
 ## Proposed Changes
 
 ### Phase 1: Cleanup & Setup
-- Remove Notion and Neon drivers (`@notionhq/client`, `@neondatabase/serverless`).
+- Remove Obsidian and Neon drivers (`@obsidianhq/client`, `@neondatabase/serverless`).
 - Update `package.json`, `wrangler.toml`, and `src/config.ts`.
 - Add D1 schema `migrations/0002_v4_edge_stack.sql`.
 

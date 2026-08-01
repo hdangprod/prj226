@@ -13,6 +13,8 @@ export interface Env {
   VECTORIZE: VectorizeIndex;
   AI: Ai;
   SESSION_KV: KVNamespace;
+  AUDIO_BUCKET?: R2Bucket;
+  R2_PUBLIC_DOMAIN?: string;
 
   // ─── Secrets ───
   TELEGRAM_BOT_TOKEN: string;
@@ -20,8 +22,9 @@ export interface Env {
   TELEGRAM_CHAT_ID: string;
   GITHUB_TOKEN: string;
   GITHUB_WEBHOOK_SECRET: string;
-  LLM_FAST_API_KEY: string;
-  LLM_PRO_API_KEY: string;
+  LLM_FAST_API_KEY?: string;
+  LLM_PRO_API_KEY?: string;
+  GEMINI_API_KEY?: string;
 
   // ─── Vars (non-secret, from wrangler.toml [vars]) ───
   GITHUB_OWNER: string;

@@ -6,6 +6,8 @@ import { handleGitHubPushWebhook } from './indexers/vaultIndexer';
 import { D1Client } from './tools/d1Client';
 import { batchCommitCaptures } from './tools/gitBatchClient';
 
+import { reconcileVaultIndexCron } from './indexers/reconciler';
+
 const app = new Hono<{ Bindings: Env }>();
 
 // Bot protection middleware
@@ -45,7 +47,7 @@ app.post('/worker', async (c) => {
 app.get('/health', async (c) => {
   const d1 = new D1Client(c.env);
   const dbOk = await d1.ping();
-  return c.json({ status: 'ok', db: dbOk ? 'connected' : 'unreachable', version: '4.1.0' });
+  return c.json({ status: 'ok', db: dbOk ? 'connected' : 'unreachable', version: '4.1.1' });
 });
 
 // Cloudflare Worker exports
@@ -54,28 +56,36 @@ export default {
     return app.fetch(request, env, ctx);
   },
 
-  // Cron Trigger: flush pending_captures to GitHub every 5 minutes
+  // Cron Trigger: flush pending_captures & reconcile vault index periodically
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     const d1 = new D1Client(env);
+    
+    // 1. Flush pending captures to GitHub
     const captures = await d1.getPendingCaptures(50);
-    if (captures.length === 0) return;
-
-    try {
-      await batchCommitCaptures(captures, env);
-      await d1.deletePendingCaptures(captures.map(c => c.id));
-      console.log(JSON.stringify({
-        event: 'cron_flush_success',
-        captures_flushed: captures.length,
-        timestamp: new Date().toISOString(),
-      }));
-    } catch (err) {
-      console.error(JSON.stringify({
-        event: 'cron_flush_error',
-        error: (err as Error).message,
-        captures_pending: captures.length,
-        timestamp: new Date().toISOString(),
-      }));
-      // Captures remain in D1 for retry next cycle
+    if (captures.length > 0) {
+      try {
+        await batchCommitCaptures(captures, env);
+        await d1.deletePendingCaptures(captures.map(c => c.id));
+        console.log(JSON.stringify({
+          event: 'cron_flush_success',
+          captures_flushed: captures.length,
+          timestamp: new Date().toISOString(),
+        }));
+      } catch (err) {
+        console.error(JSON.stringify({
+          event: 'cron_flush_error',
+          error: (err as Error).message,
+          captures_pending: captures.length,
+          timestamp: new Date().toISOString(),
+        }));
+      }
     }
+
+    // 2. Reconcile vault index to fix dropped webhooks
+    ctx.waitUntil(
+      reconcileVaultIndexCron(env)
+        .then((res) => console.log(JSON.stringify({ event: 'reconcile_cron_success', ...res })))
+        .catch((err) => console.error(JSON.stringify({ event: 'reconcile_cron_error', error: String(err) })))
+    );
   },
 };

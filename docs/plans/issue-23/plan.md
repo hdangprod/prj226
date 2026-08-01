@@ -1,7 +1,7 @@
 # Implementation Plan: Smart Weekly Scheduler (V2.0) - Issue #23
 
 ## Goal
-Tự động hóa luồng lên kế hoạch tuần bằng lệnh `/weekly_planning`. Hệ thống sẽ phân tích dữ liệu lịch trình bận rộn (từ Google Calendar và các Task trên Notion có gán Date), gửi cho AI tối ưu hóa thời gian (Temporal Tetris), chia nhỏ task (Micro-checklists) và tạo trực tiếp vào Notion khi người dùng duyệt.
+Tự động hóa luồng lên kế hoạch tuần bằng lệnh `/weekly_planning`. Hệ thống sẽ phân tích dữ liệu lịch trình bận rộn (từ Google Calendar và các Task trên Obsidian có gán Date), gửi cho AI tối ưu hóa thời gian (Temporal Tetris), chia nhỏ task (Micro-checklists) và tạo trực tiếp vào Obsidian khi người dùng duyệt.
 
 ## User Review Required
 
@@ -31,9 +31,9 @@ Tự động hóa luồng lên kế hoạch tuần bằng lệnh `/weekly_planni
 #### [NEW] src/google/client.ts
 - Viết hàm `fetchUpcomingEvents(startDate, endDate)` sử dụng Google Calendar API với `singleEvents: true` để lấy các khung giờ bận của tuần tới.
 
-### 3. Notion Client Updates
-#### [MODIFY] src/notion/client.ts
-- Bổ sung hàm `fetchActiveTasksWithDates(startDate, endDate)`: Query DB Notion lấy các task khác `Done`/`Archived` và có giá trị `Date`.
+### 3. Obsidian Client Updates
+#### [MODIFY] src/obsidian/client.ts
+- Bổ sung hàm `fetchActiveTasksWithDates(startDate, endDate)`: Query DB Obsidian lấy các task khác `Done`/`Archived` và có giá trị `Date`.
 - Cập nhật hàm tạo Task (`createTaskPage`) để hỗ trợ chèn `Callout` (Mục đích task) và nhiều block `To-do` (Checklist) vào phần thân trang (Page Body).
 
 ### 4. Xử lý logic Weekly Planning Skill
@@ -54,7 +54,7 @@ Tự động hóa luồng lên kế hoạch tuần bằng lệnh `/weekly_planni
 #### [MODIFY] src/router.ts
 - Đổi lệnh `/plan_week` thành `/weekly_planning`.
 - Format giao diện Telegram tách bạch phần "Lịch Google" và "Lịch dự kiến AI xếp".
-- Xử lý trạng thái nút bấm: Đổi thành "Processing..." khi người dùng click `[🟢 Duyệt & Lên lịch Notion Calendar]` để chống double-click.
+- Xử lý trạng thái nút bấm: Đổi thành "Processing..." khi người dùng click `[🟢 Duyệt & Lên lịch Obsidian Calendar]` để chống double-click.
 
 ### 6. Xử lý lỗi (Edge Cases)
 - **Zero Free Slots:** AI sẽ tự động phân loại các task không chèn được lịch vào danh sách "Weekly Backlog".
@@ -65,4 +65,4 @@ Tự động hóa luồng lên kế hoạch tuần bằng lệnh `/weekly_planni
 - Sếp điền các biến môi trường Google Calendar.
 - Thử gửi `/weekly_planning Dọn nhà, Code tính năng X, Họp team Y`.
 - Kiểm tra AI trả về danh sách lịch trình (không đè lên lịch bận hiện tại).
-- Ấn "Duyệt" và check Notion xem task đã tạo với Callout và Checklists chưa.
+- Ấn "Duyệt" và check Obsidian xem task đã tạo với Callout và Checklists chưa.

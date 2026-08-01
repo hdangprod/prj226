@@ -48,7 +48,7 @@ const mockEnv: Env = {
   GITHUB_TOKEN: 'mock-github-token',
   GITHUB_WEBHOOK_SECRET: 'mock-github-webhook-secret',
   GITHUB_OWNER: 'hdangprod',
-  GITHUB_REPO: 'hdangprod_wiki',
+  GITHUB_REPO: 'hdangprod_wiki_dev',
   EMBEDDING_MODEL: '@cf/baai/bge-base-en-v1.5',
   EMBEDDING_DIMENSIONS: '768',
   TELEGRAM_BOT_USERNAME: 'liam_second_brain_bot',
@@ -139,17 +139,26 @@ Content of section 2 detailing secondary topic details.`;
   const chunks = await chunkByHeadings(multiHeadingMd, 'notes/test.md');
   assert(chunks.length >= 1, 'chunkByHeadings produces valid chunks');
 
-  // ─── TEST 6: D1 Migration 0002_v4_edge_stack.sql Verification ─────────
-  const migrationPath = path.join(__dirname, '../migrations/0002_v4_edge_stack.sql');
-  assert(fs.existsSync(migrationPath), 'Migration 0002_v4_edge_stack.sql exists');
+  // ─── TEST 6: D1 Migration 0002 & 0003 Verification ───────────────────────
+  const migrationPath2 = path.join(__dirname, '../migrations/0002_v4_edge_stack.sql');
+  assert(fs.existsSync(migrationPath2), 'Migration 0002_v4_edge_stack.sql exists');
 
-  const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-  assert(migrationSql.includes('processed_updates'), 'Migration creates processed_updates table');
-  assert(migrationSql.includes('pending_captures'), 'Migration creates pending_captures table');
-  assert(migrationSql.includes('note_chunks_cache'), 'Migration creates note_chunks_cache table');
-  assert(migrationSql.includes('note_chunks_fts'), 'Migration creates FTS5 note_chunks_fts table');
-  assert(migrationSql.includes('tasks'), 'Migration creates tasks table');
-  assert(migrationSql.includes('working_memory'), 'Migration creates working_memory table');
+  const migrationSql2 = fs.readFileSync(migrationPath2, 'utf8');
+  assert(migrationSql2.includes('processed_updates'), 'Migration creates processed_updates table');
+  assert(migrationSql2.includes('pending_captures'), 'Migration creates pending_captures table');
+  assert(migrationSql2.includes('note_chunks_cache'), 'Migration creates note_chunks_cache table');
+  assert(migrationSql2.includes('note_chunks_fts'), 'Migration creates FTS5 note_chunks_fts table');
+  assert(migrationSql2.includes('tasks'), 'Migration creates tasks table');
+  assert(migrationSql2.includes('working_memory'), 'Migration creates working_memory table');
+
+  const migrationPath3 = path.join(__dirname, '../migrations/0003_v4_1_1_edge_patches.sql');
+  assert(fs.existsSync(migrationPath3), 'Migration 0003_v4_1_1_edge_patches.sql exists');
+
+  const migrationSql3 = fs.readFileSync(migrationPath3, 'utf8');
+  assert(migrationSql3.includes('system_state'), 'Migration 0003 creates system_state table');
+  assert(migrationSql3.includes('pending_vector_deletions'), 'Migration 0003 creates pending_vector_deletions table');
+  assert(migrationSql3.includes('pending_embeddings'), 'Migration 0003 creates pending_embeddings table');
+  assert(migrationSql3.includes('raw_inbox_logs'), 'Migration 0003 creates raw_inbox_logs table');
 
   console.log(`\n=== Test Results: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) {

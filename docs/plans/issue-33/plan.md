@@ -1,6 +1,6 @@
 # Implementation Plan: Rebuild PRJ226 (Liam) into 4-Layer Closed-Loop System
 
-This plan outlines the migration from the flat codebase layout to Nima Torabi's 4-layer Closed-Loop Operational Architecture (Sensor, Governance, Tool, Skills), incorporating environment-driven async decoupling (`sync` vs `cloud_tasks`), Voice-to-Text inputs, a Firestore-persisted HITL flow, and a live Gemini-driven routing evaluation suite.
+This plan outlines the migration from the flat codebase layout to Nima Torabi's 4-layer Closed-Loop Operational Architecture (Sensor, Governance, Tool, Skills), incorporating environment-driven async decoupling (`sync` vs `cloud_tasks`), Voice-to-Text inputs, a D1/KV-persisted HITL flow, and a live Gemini-driven routing evaluation suite.
 
 ## Proposed Directory Structure Refactoring
 
@@ -23,8 +23,8 @@ src/
 │   ├── intentRouter.ts     # [NEW] Probabilistic intent classification using Gemini LITE
 │   └── hitlManager.ts      # [NEW] Persists state and presents inline menus for low-confidence inputs
 ├── tools/
-│   ├── notionClient.ts     # [NEW] Notion client (handles rate limits & backoff retries internally)
-│   ├── firestoreClient.ts  # [NEW] Firestore state management client
+│   ├── obsidianClient.ts     # [NEW] Obsidian client (handles rate limits & backoff retries internally)
+│   ├── d1Client.ts  # [NEW] D1/KV state management client
 │   ├── googleClient.ts     # [NEW] Google Calendar API client
 │   └── telegramClient.ts   # [NEW] Telegram bot client
 ├── skills/
@@ -57,16 +57,16 @@ Each vertical slice represents a complete, functional loop traversing all four l
   - Update `tests/localTest.ts` to mock incoming updates and set `QUEUE_MODE = 'sync'` programmatically.
 - **DoD:** `npm run build` compiles without errors, and running `npm test` successfully prints the welcome response for a `/start` update.
 
-### Slice 2: Deep Tool Layer & Task Capture Loop (Text-to-Notion)
-- **Goal:** Migrate Notion client and implement NLP task capture.
+### Slice 2: Deep Tool Layer & Task Capture Loop (Text-to-Obsidian)
+- **Goal:** Migrate Obsidian client and implement NLP task capture.
 - **Proposed Changes:**
-  - Create `src/tools/notionClient.ts` by consolidating Notion query and creation functions.
-    - Wrap Notion API calls in retry-on-rate-limit logic using an exponential backoff helper.
-  - Create `src/tools/firestoreClient.ts` to manage user sessions and draft storage.
+  - Create `src/tools/obsidianClient.ts` by consolidating Obsidian query and creation functions.
+    - Wrap Obsidian API calls in retry-on-rate-limit logic using an exponential backoff helper.
+  - Create `src/tools/d1Client.ts` to manage user sessions and draft storage.
     - **Session Expiration:** Implement a timestamp-based TTL (Time-To-Live) verification of 5 minutes for user sessions. When evaluating incoming updates, if an existing state is older than 5 minutes, mark it as expired, clear the session automatically, and treat the new incoming payload as a fresh independent intent request.
   - Create `src/skills/taskCaptureSkill.ts` to encapsulate the task creation business logic (parsing, project fuzzy-matching, area selection, auto-prefix counting).
   - Configure `src/governance/intentRouter.ts` to identify the `Add Task` intent (e.g. commands starting with `/add_task` or messages describing tasks) with confidence evaluation.
-- **DoD:** Running `npm test` processes a natural language task request, fuzzy matches the project, retrieves task counts, prefixes the name appropriately, and creates a task with checklist items in the Notion database.
+- **DoD:** Running `npm test` processes a natural language task request, fuzzy matches the project, retrieves task counts, prefixes the name appropriately, and creates a task with checklist items in the Obsidian database.
 
 ### Slice 3: Voice Note Sensor Loop (Multi-modal Input)
 - **Goal:** Enable multi-modal signal intake via Telegram voice notes.
@@ -82,13 +82,13 @@ Each vertical slice represents a complete, functional loop traversing all four l
 - **Proposed Changes:**
   - Update `src/governance/intentRouter.ts` to calculate a confidence score for all incoming messages.
   - Implement `src/governance/hitlManager.ts`:
-    - If confidence < 95%, write the message payload and confidence data to Firestore user sessions under state `AWAITING_HITL_CONFIRMATION`.
+    - If confidence < 95%, write the message payload and confidence data to D1/KV user sessions under state `AWAITING_HITL_CONFIRMATION`.
     - Generate inline keyboards presenting potential intents (e.g. `[📁 Add Task]`, `[⚡ Focus Rescue]`, `[💡 Add Highlight]`, `[📅 Plan Week]`).
     - **Session Cancellation:** Always append a final `[❌ Hủy bỏ]` button to the inline keyboard layout, returning callback payload: `hitl_cancel`.
   - Update `src/index.ts` to process callback queries:
     - If action starts with `hitl_confirm:`, load the session, retrieve the original text, and execute the selected intent.
-    - If action is `hitl_cancel`, immediately wipe the active Firestore state and notify the user that the action was cancelled.
-- **DoD:** Sending an ambiguous message (e.g., "Liam, check this") triggers the inline keyboard. Selecting `[Add Task]` via the callback query successfully creates a task in Notion using the original text.
+    - If action is `hitl_cancel`, immediately wipe the active D1/KV state and notify the user that the action was cancelled.
+- **DoD:** Sending an ambiguous message (e.g., "Liam, check this") triggers the inline keyboard. Selecting `[Add Task]` via the callback query successfully creates a task in Obsidian using the original text.
 
 ### Slice 5: Weekly Planning Skill & Calendar Integration
 - **Goal:** Port the weekly planning capability to the Skills layer and integrate Google Calendar busy slots.
@@ -96,11 +96,11 @@ Each vertical slice represents a complete, functional loop traversing all four l
   - Create `src/tools/googleClient.ts` containing the JWT-authorized Google Calendar integration.
   - Implement `src/skills/weeklyPlanningSkill.ts` by migrating `WeeklyPlanningSkill.ts`:
     - Calls `googleClient.ts` to gather busy schedules.
-    - Queries Notion Tasks DB for scheduled active tasks.
+    - Queries Obsidian Tasks DB for scheduled active tasks.
     - Submits the aggregated context to Gemini PRO to compile optimal schedules.
-    - Persists draft schedules to Firestore.
+    - Persists draft schedules to D1/KV.
     - Integrates rate-limiting throttle delays (350ms) during bulk creation.
-- **DoD:** Running `tests/localTest.ts` executes a weekly planning session, incorporates mocked Google Calendar events, registers the planning draft in Firestore, and successfully creates bulk tasks in Notion when confirmed.
+- **DoD:** Running `tests/localTest.ts` executes a weekly planning session, incorporates mocked Google Calendar events, registers the planning draft in D1/KV, and successfully creates bulk tasks in Obsidian when confirmed.
 
 ### Slice 6: Evals Suite (Routing Accuracy Benchmark)
 - **Goal:** Establish a testing suite to guarantee intent routing accuracy.

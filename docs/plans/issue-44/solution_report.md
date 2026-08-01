@@ -1,7 +1,7 @@
 # Solution Report - Issue #41: MOD-08 Triage Skill
 
 ## 1. Context & Problem
-Users accumulate raw notes/links in Notion Inbox Tray but lack time to open Notion to classify them. Handling sequential calls on Telegram creates cognitive friction.
+Users accumulate raw notes/links in Obsidian Inbox Tray but lack time to open Obsidian to classify them. Handling sequential calls on Telegram creates cognitive friction.
 
 ## 2. Solution & Trade-offs
 Implemented MOD-08 Triage Skill with 4-stage lifecycle:

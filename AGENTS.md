@@ -1,6 +1,6 @@
 # PRJ226: AIOS (Agentic Operating System) 5-Layer Framework
 
-Serverless conversational productivity assistant built with TypeScript (v5.3.3) and Node.js (v20+). Orchestrates a Notion Second Brain using Firestore as a state buffer.
+Serverless conversational productivity assistant built with TypeScript (v5.3.3) for Cloudflare Workers. Orchestrates an Obsidian Second Brain on Cloudflare Edge Stack (D1 + Vectorize + Workers AI).
 
 ---
 
@@ -43,10 +43,15 @@ A task or hotfix is considered **Done** ONLY when:
 ### 6. Sandbox Execution Policy (Unsandboxed Mode)
 
 > [!IMPORTANT]
-
 > **ALWAYS USE BYPASS SANDBOX FOR ALL SHELL COMMANDS**:
-
 > All agents and subagents executing shell commands (`npm install`, `npm run build`, `npm test`, `node`, `npx`, `git`, etc.) MUST set `BypassSandbox: true` (Unsandboxed mode) to prevent sandbox network isolation and EPERM file access issues (e.g. NVM/Node global paths).
+
+### 7. Strict Database Isolation & Production Protection Policy
+
+> [!CAUTION]
+> **NEVER TOUCH PRODUCTION DATABASE IN TESTS OR DEVELOPMENT**:
+> - **Development & Offline Testing (`npm test`, `npm run evals`)**: MUST target `prj226-brain` (`643ded3e-456f-41f3-94d9-b5f424ee44e3`) and `prj226-wiki` Vectorize index only.
+> - **Production (`prj226-brain-prod`)**: `prj226-brain-prod` (`7923f482-c7cb-44a3-a371-8aadd012cfd5`) and `prj226-wiki-prod` are strictly reserved for live production use (`--env production`). AI agents must NEVER run tests, mock seed scripts, or data purges against `prj226-brain-prod`.
 
 ---
 
@@ -56,7 +61,7 @@ A task or hotfix is considered **Done** ONLY when:
 | :--- | :--- | :--- |
 | **Layer 1: Identity & Rules** | Global identity, non-negotiable rules, Git SOPs & Dynamic Rule Engine | [`AGENTS.md`](file:///Users/dangnguyen/Desktop/PRJ226/AGENTS.md), [`@.agents/rules-manifest.json`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/rules-manifest.json) |
 | **Layer 2: Memory & Context** | System specs, schemas, and lazy-loading sitemap | [`@docs/sitemap.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/sitemap.md), [`@docs/spec.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/spec.md), [`@docs/agents/context.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/agents/context.md) |
-| **Layer 3: Workflows & SOPs** | Bug triage & Cloud Run deployment checklists | [`@.agents/workflows/bug-hunting.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/bug-hunting.md), [`@.agents/workflows/deploy-check.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/deploy-check.md) |
+| **Layer 3: Workflows & SOPs** | Bug triage & Cloudflare Workers pre-deploy checklists | [`@.agents/workflows/bug-hunting.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/bug-hunting.md), [`@.agents/workflows/deploy-check.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/workflows/deploy-check.md) |
 | **Layer 4: Modular Skills** | Multi-agent execution, task capture, weekly plan | [`@.agents/skills/orchestrator/SKILL.md`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/skills/orchestrator/SKILL.md), [`src/skills/`](file:///Users/dangnguyen/Desktop/PRJ226/src/skills/) |
 | **Layer 5: Tools & Integrations**| Dynamic rule engine, deterministic API clients | [`src/tools/`](file:///Users/dangnguyen/Desktop/PRJ226/src/tools/), [`@.agents/scripts/rule-engine.js`](file:///Users/dangnguyen/Desktop/PRJ226/.agents/scripts/rule-engine.js) |
 

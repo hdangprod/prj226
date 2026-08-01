@@ -1,7 +1,7 @@
 # Plan - Issue #41: MOD-08 Triage Skill (Multi-threaded Inbox Routing)
 
 ## Context & Problem
-Users accumulate raw notes/links in Notion Inbox Tray but lack time to open Notion to classify them. Handling sequential calls on Telegram creates cognitive friction.
+Users accumulate raw notes/links in Obsidian Inbox Tray but lack time to open Obsidian to classify them. Handling sequential calls on Telegram creates cognitive friction.
 
 ## Solution & Trade-offs
 Implement MOD-08 Triage Skill with 4-stage lifecycle:

@@ -11,7 +11,7 @@
 ### Problem Statement
 Over time, LLM-assisted software projects suffer from **Context Rot**, **Prompt Bloat**, and **Architectural Drift**. In PRJ226:
 1. **Context Bloat**: Rule files like `github-workflow.md` were configured with `trigger: always_on`, injecting ~1,500 tokens of redundant instructions into every turn of conversation regardless of whether Git was involved.
-2. **Specification Drift**: Specifications (`docs/spec.md`) referenced obsolete pre-4-layer system directories (`src/services/`, `src/notion/`, `src/gemini/`) rather than the active 4-Layer Closed-Loop Architecture (`sensors`, `governance`, `tools`, `skills`).
+2. **Specification Drift**: Specifications (`docs/spec.md`) referenced obsolete pre-4-layer system directories (`src/services/`, `src/obsidian/`, `src/gemini/`) rather than the active 4-Layer Closed-Loop Architecture (`sensors`, `governance`, `tools`, `skills`).
 3. **Lack of AI Sitemap & Lazy-Loading**: AI agents lacked a structured index telling them where files lived and when to load them, leading to agents scanning whole file trees or re-reading historical documents (`PROJECT_JOURNEY.md`, `changelog.md`, retrospectives).
 4. **Manual Checking Fatigue**: Developers had to manually inspect documentation files after code edits to ensure no broken paths or deprecated references remained.
 
@@ -54,8 +54,8 @@ We structured the project into 5 decoupled, single-responsibility layers:
 4. **Layer 4: Modular Skills (`.agents/skills/orchestrator/`, `src/skills/`)**:
    - Preserved stateful workflow subroutines (`taskCaptureSkill`, `weeklyPlanningSkill`).
 
-5. **Layer 5: Tools & System Integrations (`src/tools/`, `.agents/rules/notion-limits.md`, `.agents/rules/centralized-messages.md`)**:
-   - Deterministic client wrappers and Notion 3 rps rate-limiting rules.
+5. **Layer 5: Tools & System Integrations (`src/tools/`, `.agents/rules/obsidian-limits.md`, `.agents/rules/centralized-messages.md`)**:
+   - Deterministic client wrappers and Obsidian 3 rps rate-limiting rules.
 
 6. **Artifact Hub (`docs/artifacts/`)**:
    - Consolidated human reviewer documents (`PROJECT_JOURNEY.md`, `changelog.md`, `retrospectives/`) with AI token guards to prevent auto-loading during coding tasks.

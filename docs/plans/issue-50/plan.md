@@ -4,8 +4,8 @@
 Rebuild PRJ226 (Liam Second Brain) from scratch as a zero-infrastructure-cost dual-speed personal assistant on Cloudflare Workers + Neon Postgres (pgvector) + Vercel AI SDK.
 
 ## Key Changes
-1. **Runtime**: Migrate GCP Cloud Run → Cloudflare Workers (Hono framework).
-2. **State Store**: Migrate Firestore → Neon Serverless Postgres (`pgvector`).
+1. **Runtime**: Migrate Cloudflare Workers → Cloudflare Workers (Hono framework).
+2. **State Store**: Migrate D1/KV → Neon Serverless Postgres (`pgvector`).
 3. **Queuing**: Migrate Upstash Redis/QStash → Cloudflare Durable Objects + Cloudflare Queues.
 4. **LLM Abstraction**: Implement provider-agnostic `LLMRouter` using Vercel AI SDK (`ai` package).
 5. **Cold Path**: OpenWiki Personal Brain GitHub Actions workflow + Neon pgvector vault indexer script.

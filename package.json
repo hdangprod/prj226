@@ -7,8 +7,8 @@
     "build": "wrangler build",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "npx ts-node --compiler-options '{\"module\":\"CommonJS\",\"types\":[\"node\",\"@cloudflare/workers-types\"]}' tests/localTest.ts",
-    "evals": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' evals/run-evals.ts",
+    "test": "npx tsx tests/localTest.ts",
+    "evals": "npx tsx evals/run-evals.ts",
     "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit"
   },

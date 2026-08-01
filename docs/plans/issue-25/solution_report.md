@@ -5,11 +5,11 @@ Weekly schedule preview messages were difficult to skim and lacked visual struct
 
 ## 2. 💡 Solution Architecture
 - Structured preview output grouped by day with clear priority badges (`High`, `Medium`, `Low`) and estimated duration.
-- Added deep links (`notion://`) to open synchronized tasks directly inside the Notion mobile app.
+- Added deep links (`obsidian://`) to open synchronized tasks directly inside the Obsidian mobile app.
 
 ## 3. 🛠️ Key Files Touched
 - `src/skills/weeklyPlanningSkill.ts`
 - `src/constants/messages.ts`
 
 ## 4. 📈 Lessons Learned & Takeaways
-- Deep links (`notion://`) improve mobile UX by launching native apps directly.
+- Deep links (`obsidian://`) improve mobile UX by launching native apps directly.

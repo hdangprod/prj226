@@ -17,12 +17,10 @@ interface TestCase {
 }
 
 const mockEnv: Env = {
+  DB: {} as any,
+  VECTORIZE: {} as any,
+  AI: {} as any,
   SESSION_KV: {
-    put: async () => {},
-    get: async () => null,
-    delete: async () => {},
-  } as any,
-  FALLBACK_KV: {
     put: async () => {},
     get: async () => null,
     delete: async () => {},
@@ -30,26 +28,19 @@ const mockEnv: Env = {
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || 'mock',
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || 'mock',
   TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || 'mock',
-  NOTION_API_KEY: process.env.NOTION_API_KEY || 'mock',
-  NOTION_TASKS_DB_ID: 'mock',
-  NOTION_PROJECTS_DB_ID: 'mock',
-  NOTION_AREAS_DB_ID: 'mock',
-  NOTION_RESOURCES_DB_ID: 'mock',
-  NOTION_DAILY_LOGS_DB_ID: 'mock',
-  DATABASE_URL: process.env.DATABASE_URL || 'postgres://mock:mock@localhost:5432/mock',
+  GITHUB_TOKEN: process.env.GITHUB_TOKEN || 'mock',
+  GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET || 'mock',
   LLM_FAST_API_KEY: process.env.LLM_FAST_API_KEY || process.env.GEMINI_API_KEY || 'mock',
   LLM_PRO_API_KEY: process.env.LLM_PRO_API_KEY || process.env.GEMINI_API_KEY || 'mock',
-  GITHUB_TOKEN: 'mock',
-  GITHUB_VAULT_REPO: 'owner/repo',
-  FEATURE_DEBOUNCE_BUFFER: 'OFF',
-  DEBOUNCE_BUFFER_TIME_MS: '4000',
-  DEBOUNCE_MAX_BUFFER_SIZE: '15',
-  FEATURE_TRIAGE_MODE: 'ON',
+  GITHUB_OWNER: 'hdangprod',
+  GITHUB_REPO: 'hdangprod_wiki',
+  EMBEDDING_MODEL: '@cf/baai/bge-base-en-v1.5',
+  EMBEDDING_DIMENSIONS: '768',
+  TELEGRAM_BOT_USERNAME: 'liam_second_brain_bot',
   LLM_FAST_PROVIDER: 'google',
-  LLM_FAST_MODEL: 'gemini-2.0-flash',
+  LLM_FAST_MODEL: 'gemini-3.5-flash-lite',
   LLM_PRO_PROVIDER: 'google',
-  LLM_PRO_MODEL: 'gemini-2.5-pro',
-  LLM_EMBED_MODEL: 'text-embedding-004',
+  LLM_PRO_MODEL: 'gemini-3.6-flash',
 };
 
 async function runEvals() {

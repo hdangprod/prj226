@@ -25,7 +25,7 @@ We implemented a vendor-agnostic Dynamic Rule Loading Engine using the Adapter P
 ├── rules/                       <-- [PURE DATA] Framework-agnostic Markdown rules
 │   ├── github-workflow.md       (always_on: true)
 │   ├── centralized-messages.md
-│   └── notion-limits.md
+│   └── obsidian-limits.md
 ├── rules-manifest.json          <-- [SINGLE SOURCE OF TRUTH] Mapping manifest
 ├── scripts/
 │   ├── rule-engine.js           <-- [CORE ENGINE] CLI input evaluator

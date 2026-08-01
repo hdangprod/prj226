@@ -337,6 +337,88 @@ export class D1Client {
     });
   }
 
+  // Bulk FTS & Note Chunks Upsert (Bypasses SQLite FTS5 Auto-Sync Trigger contention)
+  async bulkUpsertNoteChunksAndFts(
+    chunks: Array<{
+      id: string;
+      githubPath: string;
+      chunkIndex: number;
+      title: string | null;
+      content: string;
+      contentHash: string;
+      tags: string | null;
+    }>
+  ): Promise<void> {
+    if (chunks.length === 0) return;
+    return withRetry(async () => {
+      const statements: D1PreparedStatement[] = [];
+      for (const c of chunks) {
+        statements.push(
+          this.env.DB.prepare(
+            `INSERT INTO note_chunks_cache (id, github_path, chunk_index, title, content, content_hash, tags)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+             title=excluded.title, content=excluded.content, content_hash=excluded.content_hash, tags=excluded.tags, updated_at=CURRENT_TIMESTAMP`
+          ).bind(c.id, c.githubPath, c.chunkIndex, c.title, c.content, c.contentHash, c.tags)
+        );
+        statements.push(
+          this.env.DB.prepare(
+            `INSERT INTO note_chunks_fts (id, title, content)
+             VALUES (?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+             title=excluded.title, content=excluded.content`
+          ).bind(c.id, c.title || '', c.content)
+        );
+      }
+      const BATCH_LIMIT = 50;
+      for (let i = 0; i < statements.length; i += BATCH_LIMIT) {
+        const batchSlice = statements.slice(i, i + BATCH_LIMIT);
+        await this.env.DB.batch(batchSlice);
+      }
+    });
+  }
+
+  // Durable Synchronous Raw Inbox Logs
+  async saveRawInboxLog(updateId: number, payload: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        'INSERT OR IGNORE INTO raw_inbox_logs (update_id, payload, status) VALUES (?, ?, ?)'
+      ).bind(updateId, payload, 'pending');
+      await stmt.run();
+    });
+  }
+
+  async markRawInboxLogStatus(updateId: number, status: 'processed' | 'failed', error?: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        'UPDATE raw_inbox_logs SET status = ?, error = ? WHERE update_id = ?'
+      ).bind(status, error || null, updateId);
+      await stmt.run();
+    });
+  }
+
+  // Staging for Vectorize Deletions & Workers AI Embeddings Quota Fallback
+  async stageFailedVectorDeletions(records: Array<{ vectorId: string; githubPath: string }>): Promise<void> {
+    if (records.length === 0) return;
+    return withRetry(async () => {
+      const stmts = records.map((r) =>
+        this.env.DB.prepare(
+          'INSERT INTO pending_vector_deletions (id, vector_id, github_path) VALUES (?, ?, ?)'
+        ).bind(crypto.randomUUID(), r.vectorId, r.githubPath)
+      );
+      await this.env.DB.batch(stmts);
+    });
+  }
+
+  async stagePendingEmbedding(chunkId: string, content: string, githubPath: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        `INSERT OR REPLACE INTO pending_embeddings (chunk_id, content, github_path, status) VALUES (?, ?, ?, 'quota_deferred')`
+      ).bind(chunkId, content, githubPath);
+      await stmt.run();
+    });
+  }
+
   // Health
   async ping(): Promise<boolean> {
     try {
