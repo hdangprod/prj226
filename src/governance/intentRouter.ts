@@ -101,6 +101,25 @@ export async function handleWorkerPayload(
     return;
   }
 
+  // Universal Zero-Loss Ingestion: Save every user message to pending_captures
+  let captureId: string | null = null;
+  const isControlCommand =
+    userText.trim().startsWith('/') ||
+    ['check tasks today', 'morning brief', 'end of day', 'wrapping up'].includes(
+      userText.trim().toLowerCase(),
+    );
+
+  if (!isControlCommand) {
+    try {
+      const d1 = new D1Client(env);
+      const { dateStr: datePath, timePart } = getLocalDate();
+      const filePath = `inbox/${datePath}/${timePart}.md`;
+      captureId = await d1.createCapture(userText, filePath);
+    } catch (ingestErr) {
+      console.warn('[Zero-Loss Ingestion Warning]:', ingestErr);
+    }
+  }
+
   // Classify intent
   const llm = new LLMRouter(env);
   let classification: IntentResponse;
@@ -124,12 +143,12 @@ export async function handleWorkerPayload(
 
   // HITL: confidence < 95% → ask for clarification
   if (classification.confidence < 95) {
-    await sendHITLClarification(chatId, userText, classification, env);
+    await sendHITLClarification(chatId, userText, classification, env, captureId);
     return;
   }
 
   // Dispatch to skill
-  await dispatchToSkill(classification, chatId, userText, update as unknown as TelegramUpdate, env);
+  await dispatchToSkill(classification, chatId, userText, update as unknown as TelegramUpdate, env, captureId);
   
   console.log(JSON.stringify({ event: 'intent_router_end', chatId }));
 }
@@ -142,8 +161,9 @@ async function dispatchToSkill(
   userText: string,
   update: TelegramUpdate,
   env: Env,
+  captureId?: string | null,
 ): Promise<void> {
-  const ctx = { chatId, userText, extracted: classification.extracted ?? {}, env, update };
+  const ctx = { chatId, userText, extracted: classification.extracted ?? {}, env, update, captureId };
 
   try {
     switch (classification.intent) {
@@ -188,12 +208,16 @@ async function sendHITLClarification(
   userText: string,
   classification: IntentResponse,
   env: Env,
+  captureId?: string | null,
 ): Promise<void> {
-  // Auto-capture to pending_captures (never lose a thought)
-  const d1 = new D1Client(env);
   const { dateStr: datePath, timePart } = getLocalDate();
-  const filePath = `inbox/${datePath}/${timePart}.md`;
-  await d1.createCapture(userText, filePath);
+  
+  // If not captured yet, capture now
+  if (!captureId) {
+    const d1 = new D1Client(env);
+    const filePath = `inbox/${datePath}/${timePart}.md`;
+    await d1.createCapture(userText, filePath);
+  }
 
   const obsidianUrl = `obsidian://new?vault=hdangprod_wiki&file=inbox/${datePath}/${timePart}&content=${encodeURIComponent(userText)}`;
 
@@ -298,4 +322,5 @@ export interface SkillContext {
   extracted: Record<string, unknown>;
   env: Env;
   update: TelegramUpdate;
+  captureId?: string | null;
 }

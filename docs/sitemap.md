@@ -54,7 +54,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │       ├── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
 │       ├── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
 │       ├── issue-59/                  # PRJ226 v4.1.1 Edge Stack Hardening & Strict Dev/Prod Isolation
-│       └── issue-61/                  # PRJ226 v4.2 Inbox Organizer with Knowledge Graph Connections
+│       ├── issue-61/                  # PRJ226 v4.2 Inbox Organizer with Knowledge Graph Connections
+│       └── issue-63/                  # PRJ226 v4.2.1 Universal Zero-Loss Ingestion & 0-Results Search UX Fallback
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts

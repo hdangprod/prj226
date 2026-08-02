@@ -28,9 +28,36 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
   const results = await hybridSearch(userText, embedding, env);
 
   if (results.length === 0) {
-    await sendMessage(
+    let captureId = ctx.captureId;
+    if (!captureId) {
+      try {
+        const filePath = `inbox/cap_${Date.now()}.md`;
+        captureId = await d1.createCapture(userText, filePath);
+      } catch {
+        // ignore capture creation error if fallback
+      }
+    }
+
+    const shortText = userText.length > 80 ? userText.substring(0, 80) + '...' : userText;
+
+    const keyboard = {
+      inline_keyboard: [
+        ...(captureId
+          ? [
+              [
+                { text: '🧠 Organize Right Now', callback_data: `organize:${captureId}` },
+                { text: '➕ Convert to Task', callback_data: `task_from_inbox:${captureId}` },
+              ],
+            ]
+          : []),
+        [{ text: '📋 Review Inbox', callback_data: 'intent:Inbox_Organize' }],
+      ],
+    };
+
+    await sendMessageWithKeyboard(
       chatId,
-      `📒 <b>No results found</b>\n\nI couldn't find anything about "${escapeHtml(userText)}" in your notes or wiki yet.`,
+      `📒 <b>No search results found</b>\n\nI couldn't find anything about <i>"${escapeHtml(shortText)}"</i> in your existing notes.\n\n📥 <b>Don't worry, your thought has been saved to your inbox!</b>\n\nWhat would you like to do with it?`,
+      keyboard,
       env,
     );
     return;
