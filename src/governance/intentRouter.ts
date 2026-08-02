@@ -28,6 +28,8 @@ import { handleKnowledgeSearch } from '../skills/knowledgeSearchSkill';
 import { handleRescueMode } from '../skills/rescueModeSkill';
 import { handleSessionHandoff } from '../skills/sessionHandoffSkill';
 import { handleReschedule } from '../skills/rescheduleSkill';
+import { handleInboxOrganize, handleOrganizeCapture, handleApproveOrganize, handleArchiveInbox } from '../skills/inboxOrganizeSkill';
+import { getLocalDate } from '../lib/dateUtils';
 import type { TelegramUpdate } from '../sensors/telegramWebhook';
 
 // ─── Intent Schema ────────────────────────────────────────────────────────────
@@ -39,6 +41,7 @@ export const INTENTS = [
   'Knowledge_Search',
   'Rescue_Mode',
   'Session_Handoff',
+  'Inbox_Organize',
 ] as const;
 
 export type Intent = (typeof INTENTS)[number];
@@ -62,6 +65,7 @@ Available intents:
 - Knowledge_Search: User is searching for information in their notes or knowledge base. Examples: "what do I know about", "find my notes on", "search for", "what documents do I have"
 - Rescue_Mode: User is tired, low energy, or overwhelmed and needs easy tasks. Examples: "I'm tired", "low energy", "what can I do quickly", "easy wins", "rescue me"
 - Session_Handoff: User wants to close their work session, save state, or prepare for tomorrow. Examples: "end of day", "save my progress", "session handoff", "wrapping up", "handoff to tomorrow"
+- Inbox_Organize: User wants to review, organize, or process their raw inbox captures into permanent knowledge notes. Examples: "/inbox", "organize my notes", "review inbox", "what did I capture", "process my thoughts", "show my captures"
 
 Return a JSON object with:
 - intent: the classified intent string
@@ -107,9 +111,10 @@ export async function handleWorkerPayload(
       IntentResponseSchema,
       INTENT_SYSTEM_PROMPT,
     );
-  } catch (err) {
+  } catch (err: any) {
     console.error('[IntentRouter] Classification failed:', err);
-    await sendMessage(chatId, '⚠️ Liam is having trouble understanding that. Please try again.', env);
+    const errMsg = err?.message || String(err);
+    await sendMessage(chatId, `⚠️ <b>Classification Error:</b>\n<code>${errMsg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>`, env);
     return;
   }
 
@@ -160,6 +165,9 @@ async function dispatchToSkill(
       case 'Session_Handoff':
         await handleSessionHandoff(ctx);
         break;
+      case 'Inbox_Organize':
+        await handleInboxOrganize(ctx);
+        break;
       default:
         await sendMessage(chatId, "❓ I wasn't sure how to handle that. Could you rephrase?", env);
     }
@@ -183,11 +191,11 @@ async function sendHITLClarification(
 ): Promise<void> {
   // Auto-capture to pending_captures (never lose a thought)
   const d1 = new D1Client(env);
-  const now = new Date();
-  const datePath = now.toISOString().split('T')[0];
-  const timePart = now.toTimeString().split(' ')[0].replace(/:/g, '');
+  const { dateStr: datePath, timePart } = getLocalDate();
   const filePath = `inbox/${datePath}/${timePart}.md`;
   await d1.createCapture(userText, filePath);
+
+  const obsidianUrl = `obsidian://new?vault=hdangprod_wiki&file=inbox/${datePath}/${timePart}&content=${encodeURIComponent(userText)}`;
 
   const keyboard = {
     inline_keyboard: [
@@ -204,17 +212,14 @@ async function sendHITLClarification(
         { text: '🌙 End Session', callback_data: 'intent:Session_Handoff' },
       ],
       [
-        {
-          text: '📝 Open in Obsidian',
-          url: `obsidian://new?vault=hdangprod_wiki&file=inbox/${datePath}/${timePart}&content=${encodeURIComponent(userText)}`,
-        }
-      ]
+        { text: '📥 Organize Inbox', callback_data: 'intent:Inbox_Organize' },
+      ],
     ],
   };
 
   await sendMessageWithKeyboard(
     chatId,
-    `🤔 I'm not sure what you mean by:\n<i>"${escapeHtml(userText)}"</i>\n\nWhat would you like to do?`,
+    `🤔 I'm not sure what you mean by:\n<i>"${escapeHtml(userText)}"</i>\n\n📝 <a href="${obsidianUrl}">Open draft in Obsidian</a>\n\nWhat would you like to do?`,
     keyboard,
     env,
   );
@@ -242,6 +247,41 @@ async function handleCallbackQuery(
       {} as unknown as TelegramUpdate,
       env,
     );
+  }
+
+  // Inbox Organize callbacks
+  if (data.startsWith('organize:')) {
+    const captureId = data.replace('organize:', '');
+    await handleOrganizeCapture(captureId, chatId, env);
+  }
+
+  if (data.startsWith('approve_organize:')) {
+    const captureId = data.replace('approve_organize:', '');
+    await handleApproveOrganize(captureId, chatId, env);
+  }
+
+  if (data.startsWith('archive_inbox:')) {
+    const captureId = data.replace('archive_inbox:', '');
+    await handleArchiveInbox(captureId, chatId, env);
+  }
+
+  if (data.startsWith('cancel_organize:')) {
+    await sendMessage(chatId, '❌ Organization cancelled.', env);
+  }
+
+  if (data.startsWith('task_from_inbox:')) {
+    const captureId = data.replace('task_from_inbox:', '');
+    const d1 = new D1Client(env);
+    const capture = await d1.getCaptureById(captureId);
+    if (capture) {
+      await dispatchToSkill(
+        { intent: 'Task_Capture', confidence: 100, extracted: {} },
+        chatId,
+        capture.content,
+        {} as unknown as TelegramUpdate,
+        env,
+      );
+    }
   }
 }
 

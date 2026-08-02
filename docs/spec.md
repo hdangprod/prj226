@@ -26,10 +26,10 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
   - KV Namespace: `430f495e8bbb4041bed2b7be90fee78f`
   - GitHub Vault: `hdangprod/hdangprod_wiki_prod`
 
-## Database Schema (Cloudflare D1: `migrations/0002_v4_edge_stack.sql` & `migrations/0003_v4_1_1_edge_patches.sql`)
+## Database Schema (Cloudflare D1: `migrations/0002_v4_edge_stack.sql`, `migrations/0003_v4_1_1_edge_patches.sql` & `migrations/0004_inbox_organize.sql`)
 - **`processed_updates`**: Global idempotency table (`update_id` BIGINT PK).
 - **`raw_inbox_logs`**: Durable synchronous Telegram update log (`update_id`, `payload`, `status`, `error`, `created_at`).
-- **`pending_captures`**: Staging queue for rapid Telegram captures (`id`, `content`, `source`, `file_path`, `created_at`).
+- **`pending_captures`**: Staging queue for rapid Telegram captures (`id`, `content`, `source`, `file_path`, `created_at`, `status`, `organized_path`). Status lifecycle: `'raw'` → `'flushed'` → `'organized'` → `'archived'`.
 - **`pending_embeddings`**: Staging queue for Workers AI quota-deferred chunk embeddings (`chunk_id`, `content`, `github_path`, `status`, `created_at`).
 - **`pending_vector_deletions`**: Staging queue for retrying failed Vectorize deletes (`id`, `vector_id`, `github_path`, `created_at`).
 - **`system_state`**: Key-value table tracking `last_indexed_commit_sha` for the reconciliation cron (`key`, `value`, `updated_at`).
@@ -57,7 +57,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
         └── D1 FTS5 Keyword Search      └── GitHub Vault Sync (hdangprod_wiki)
               └────────┬────────────────────────┘
                        ▼
-               [ SKILLS LAYER ] ──(6 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff)
+               [ SKILLS LAYER ] ──(7 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff, Inbox_Organize)
                        │
                        ▼
                 [ TOOL LAYER ]  ──(D1Client + VectorizeClient + GitBatchClient + GitHubReader + Telegram API)
@@ -67,18 +67,19 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `telegramWebhook.ts`: Webhook receiver with < 50ms typing indicator ack, Whisper voice transcription via Workers AI, and 4-second KV debounce buffering before intent routing.
 
 ### 2. Governance Layer (`src/governance/`)
-- `intentRouter.ts`: Evaluates intent across 6 categories using LLMRouter. Confidence ≥ 95% dispatches to Skill. Confidence < 95% auto-captures thought to `pending_captures` AND presents HITL clarification keyboard with Obsidian deep link.
+- `intentRouter.ts`: Evaluates intent across 7 categories using LLMRouter. Confidence ≥ 95% dispatches to Skill. Confidence < 95% auto-captures thought to `pending_captures` AND presents HITL clarification keyboard with Obsidian deep link.
 
 ### 3. LLM Router & Embeddings (`src/router/`, `src/lib/`)
 - `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`), supporting a single unified API key (`GEMINI_API_KEY`, `LLM_FAST_API_KEY`, or `LLM_PRO_API_KEY`) for both models.
 - `embeddings.ts`: Workers AI `@cf/baai/bge-base-en-v1.5` 768-dim embedding generator + SHA-256 content hash namespacing.
 - `chunking.ts`: Markdown H2 heading chunker.
 - `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3).
+- `dateUtils.ts`: Centralized UTC+7 local timezone date formatting.
 
 ### 4. Tool Layer (`src/tools/`)
 - `d1Client.ts`: Cloudflare D1 prepared statement client with exponential backoff & jitter.
 - `vectorizeClient.ts`: Cloudflare Vectorize upsert/delete client (100-item batching).
-- `gitBatchClient.ts`: GitHub Git Data API batch commit engine (flushes `pending_captures` to GitHub in 1 commit).
+- `gitBatchClient.ts`: GitHub Git Data API batch commit engine (flushes `pending_captures` to GitHub in 1 commit) + `deleteGitHubFile`.
 - `githubClient.ts`: GitHub Git Data API blob reader (`GitHubReader`) and OKF document parser.
 - `telegramClient.ts`: Telegram Bot API wrapper.
 
@@ -92,6 +93,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `knowledgeSearchSkill.ts`: Zero GitHub API call hot-path search reading directly from D1 `note_chunks_cache` + Obsidian deep link buttons.
 - `rescueModeSkill.ts`: Quick-win task filter (estimate ≤ 0.5h).
 - `sessionHandoffSkill.ts`: Session working memory snapshot recorder.
+- `inboxOrganizeSkill.ts`: 3-phase inbox review and organization workflow (list cards → AI draft with top-5 Vectorize [[WikiLinks]] → commit & index).
 
 ---
 

@@ -55,30 +55,28 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
     'You are Liam, a precise AI second brain. Answer grounded in the provided sources only. Do not hallucinate.',
   );
 
-  // Build inline keyboard for source links
-  const keyboardRows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
+  // Build source links and callback keyboard
+  const keyboardRows: Array<Array<{ text: string; callback_data?: string }>> = [];
+  let sourceLinks = '';
 
   for (const c of orderedChunks.slice(0, 4)) {
-    const titleText = c.title ? c.title.substring(0, 20) : c.file_path.substring(0, 20);
+    const titleText = c.title ? c.title.substring(0, 25) : c.file_path.substring(0, 25);
     const vault = 'hdangprod_wiki';
     const cleanPath = (c.file_path || '').replace(/\.md$/, '');
     const url = `obsidian://open?vault=${vault}&file=${encodeURIComponent(cleanPath)}`;
 
+    sourceLinks += `\n• 📝 <a href="${url}">${titleText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>`;
     keyboardRows.push([
       {
-        text: `📝 ${titleText}`,
+        text: `🔍 View snippet: ${titleText}`,
         callback_data: `view_chunk:${c.id}`,
-      },
-      {
-        text: `🔗 Obsidian`,
-        url,
       }
     ]);
   }
 
   await sendMessageWithKeyboard(
     chatId,
-    `🔍 <b>Knowledge Search Results</b>\n\n${summary}`,
+    `🔍 <b>Knowledge Search Results</b>\n\n${summary}${sourceLinks ? `\n\n<b>Sources:</b>${sourceLinks}` : ''}`,
     { inline_keyboard: keyboardRows as any },
     env,
   );

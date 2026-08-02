@@ -29,13 +29,13 @@ PRJ226 (Liam v4.1) is an AI-Native Second Brain & Personal OS built on a serverl
         └── D1 FTS5 Keyword Search      └── GitHub Vault Sync (hdangprod_wiki)
               └────────┬────────────────────────┘
                        ▼
-               [ SKILLS LAYER ] ──(6 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff)
+               [ SKILLS LAYER ] ──(7 Intents: Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff, Inbox_Organize)
                        │
                        ▼
                 [ TOOL LAYER ]  ──(D1Client + VectorizeClient + GitBatchClient + GitHubReader + Telegram API)
 ```
 
-## 3. Database Schemas (Cloudflare D1: `migrations/0002_v4_edge_stack.sql`)
+## 3. Database Schemas (Cloudflare D1: `migrations/0002_v4_edge_stack.sql` & `migrations/0004_inbox_organize.sql`)
 
 ### `processed_updates`
 - `update_id` (BIGINT, Primary Key)
@@ -46,6 +46,8 @@ PRJ226 (Liam v4.1) is an AI-Native Second Brain & Personal OS built on a serverl
 - `content` (TEXT)
 - `source` (TEXT)
 - `file_path` (TEXT)
+- `status` (TEXT - `'raw'`, `'flushed'`, `'organized'`, `'archived'`)
+- `organized_path` (TEXT - e.g. `wiki/architecture/zero-cold-start.md`)
 - `created_at` (TIMESTAMPTZ)
 
 ### `note_chunks_cache`

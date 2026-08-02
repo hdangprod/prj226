@@ -99,3 +99,28 @@ export async function batchCommitCaptures(captures: PendingCapture[], env: Env):
     }
   }
 }
+
+export async function deleteGitHubFile(filePath: string, env: Env): Promise<void> {
+  const headers = {
+    Authorization: `token ${env.GITHUB_TOKEN}`,
+    'User-Agent': 'PRJ226-Liam/4.1',
+    'Content-Type': 'application/json',
+  };
+  const baseUrl = `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}`;
+
+  try {
+    const getRes = await fetchWithRetry(`${baseUrl}/contents/${filePath}`, { headers });
+    const fileData = await getRes.json() as { sha: string };
+
+    await fetchWithRetry(`${baseUrl}/contents/${filePath}`, {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({
+        message: `chore(inbox): archive organized note ${filePath} [skip ci]`,
+        sha: fileData.sha,
+      }),
+    });
+  } catch (err) {
+    console.warn(`[deleteGitHubFile] Could not delete ${filePath}:`, err);
+  }
+}

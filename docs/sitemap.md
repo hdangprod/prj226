@@ -33,7 +33,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── rules/
 │   │   ├── github-workflow.md         # [AIOS Layer 1 - Always On] Git, branching, commit & PR rules
 │   │   ├── database-isolation.md      # [AIOS Layer 1 - Always On] Strict test vs prod D1 isolation rules
-│   │   └── centralized-messages.md    # [AIOS Layer 5 - On-Demand] UI/Bot text message constants
+│   │   ├── centralized-messages.md    # [AIOS Layer 5 - On-Demand] UI/Bot text message constants
+│   │   └── telegram-limits.md         # [AIOS Layer 5 - On-Demand] Telegram payload & character limits
 │   ├── rules-manifest.json            # [SSOT] Dynamic rule mapping manifest
 │   ├── scripts/
 │   │   └── rule-engine.js             # [Core Engine] CLI rule resolver
@@ -51,16 +52,19 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │       ├── issue-52/                  # OpenWiki Private Vault Setup & Native Markdown-to-OKF Synthesis
 │       ├── issue-54/                  # HNSW Vector Index Migration & Integration Test
 │       ├── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
-│       └── issue-59/                  # PRJ226 v4.1.1 Edge Stack Hardening & Strict Dev/Prod Isolation
+│       ├── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
+│       ├── issue-59/                  # PRJ226 v4.1.1 Edge Stack Hardening & Strict Dev/Prod Isolation
+│       └── issue-61/                  # PRJ226 v4.2 Inbox Organizer with Knowledge Graph Connections
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts
 ├── tests/
-│   └── localTest.ts                   # v4.1 Offline integration test harness (22 tests)
+│   └── localTest.ts                   # v4.1 Offline integration test harness (28 tests)
 ├── migrations/                        # Cloudflare D1 SQL Migrations
 │   ├── 0001_init.sql                  # [Historical] Initial schema
 │   ├── 0002_v4_edge_stack.sql         # [Historical] D1 SQLite + FTS5 initial schema
-│   └── 0003_v4_1_1_edge_patches.sql   # [Active] System state, inbox logs, deferred queues schema
+│   ├── 0003_v4_1_1_edge_patches.sql   # [Historical] System state, inbox logs, deferred queues schema
+│   └── 0004_inbox_organize.sql        # [Active] Pending captures status lifecycle & organized path schema
 └── src/                               # TypeScript application source code
     ├── index.ts                       # Hono entrypoint & routing initialization
     ├── config.ts                      # Cloudflare Workers environment bindings & type contracts
@@ -70,27 +74,29 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   ├── embeddings.ts              # Workers AI embeddings & SHA-256 content hash
     │   ├── chunking.ts                # Heading-based Markdown chunker & frontmatter parser
     │   ├── hybridSearch.ts            # RRF (Reciprocal Rank Fusion) hybrid search engine
-    │   └── fetchUtils.ts              # Resilient fetchWithRetry helper
+    │   ├── fetchUtils.ts              # Resilient fetchWithRetry helper
+    │   └── dateUtils.ts               # UTC+7 local date & time path generator
     ├── indexers/
     │   ├── vaultIndexer.ts            # GitHub Push Webhook handler (edge cache indexer)
     │   └── reconciler.ts              # GitHub webhook reconciliation cron trigger
     ├── sensors/
     │   └── telegramWebhook.ts         # Telegram webhook receiver (Whisper AI + KV 4s debounce)
     ├── governance/
-    │   └── intentRouter.ts            # LLM intent classifier (6 intents + Auto-Capture + HITL)
+    │   └── intentRouter.ts            # LLM intent classifier (7 intents + Auto-Capture + HITL)
     ├── tools/
     │   ├── d1Client.ts                # D1 database prepared-statement client
     │   ├── vectorizeClient.ts         # Cloudflare Vectorize client
     │   ├── gitBatchClient.ts          # GitHub Git Data API batch commit client
     │   ├── githubClient.ts            # GitHub Git Data API blob reader (GitHubReader)
     │   └── telegramClient.ts          # Telegram Bot API client (fetch-native)
-    ├── skills/                        # 6 PRD skill handlers
+    ├── skills/                        # 7 PRD skill handlers
     │   ├── dailyFocusSkill.ts
     │   ├── taskCaptureSkill.ts
     │   ├── rescheduleSkill.ts
     │   ├── knowledgeSearchSkill.ts
     │   ├── rescueModeSkill.ts
-    │   └── sessionHandoffSkill.ts
+    │   ├── sessionHandoffSkill.ts
+    │   └── inboxOrganizeSkill.ts
     └── types/
         └── index.ts                   # Re-exported type definitions hub
 ```

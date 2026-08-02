@@ -25,6 +25,7 @@ export interface Env {
   LLM_FAST_API_KEY?: string;
   LLM_PRO_API_KEY?: string;
   GEMINI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
 
   // ─── Vars (non-secret, from wrangler.toml [vars]) ───
   GITHUB_OWNER: string;

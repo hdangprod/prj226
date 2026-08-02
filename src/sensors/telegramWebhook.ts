@@ -2,6 +2,7 @@ import type { Env } from '../config';
 import { sendChatAction, sendMessage } from '../tools/telegramClient';
 import { handleWorkerPayload } from '../governance/intentRouter';
 import { D1Client } from '../tools/d1Client';
+import { getLocalDate } from '../lib/dateUtils';
 
 export interface TelegramUpdate {
   update_id: number;
@@ -72,16 +73,21 @@ export async function handleTelegramWebhook(
   const kvKey = `debounce:${userId}`;
   const prevText = await env.SESSION_KV.get(kvKey);
   const combinedText = prevText ? `${prevText}\n${text}` : text;
-  await env.SESSION_KV.put(kvKey, combinedText, { expirationTtl: 4 });
+  await env.SESSION_KV.put(kvKey, combinedText, { expirationTtl: 60 });
 
-  // First message: send ack
-  if (!prevText) {
+  const isDev = env.GITHUB_REPO?.endsWith('_dev');
+  const delayMs = isDev ? 50 : 1500;
+
+  // First message: send ack in production
+  if (!prevText && !isDev) {
     ctx.waitUntil(sendMessage(chatId, '⏳ <i>Grouping messages...</i>', env).catch(() => {}));
   }
 
-  // 7. Background debounce finalization
+  // 7. Background debounce finalization & immediate dev flush
   ctx.waitUntil((async () => {
-    await new Promise((r) => setTimeout(r, 4500));
+    if (delayMs > 0) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
     const finalText = await env.SESSION_KV.get(kvKey);
     if (finalText !== combinedText) return; // newer message overwrote, exit
 
@@ -97,6 +103,20 @@ export async function handleTelegramWebhook(
       env,
     );
     await d1.markRawInboxLogStatus(update.update_id, 'processed');
+
+    // Fast testing: immediate GitHub flush in dev environment
+    if (isDev) {
+      try {
+        const pending = await d1.getPendingCaptures(50);
+        if (pending.length > 0) {
+          await batchCommitCaptures(pending, env);
+          await d1.markCapturesFlushed(pending.map((c) => c.id));
+          console.log(`[Dev Fast Sync] Flushed ${pending.length} captures immediately to GitHub!`);
+        }
+      } catch (flushErr) {
+        console.error('[Dev Immediate Flush Error]:', flushErr);
+      }
+    }
   })().catch(async (err) => {
     console.error(`[Background Processing Error] Update ${update.update_id}:`, err);
     await d1.markRawInboxLogStatus(update.update_id, 'failed', String(err));
@@ -104,11 +124,10 @@ export async function handleTelegramWebhook(
 }
 
 export function generateDeterministicCapturePath(date: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const yyyymmdd = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
-  const hhmmss = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  const { dateStr, timePart } = getLocalDate(date);
+  const dateCompact = dateStr.replace(/-/g, '');
   const rand = crypto.randomUUID().split('-')[0];
-  return `inbox/cap_${yyyymmdd}_${hhmmss}_${rand}.md`;
+  return `inbox/cap_${dateCompact}_${timePart}_${rand}.md`;
 }
 
 async function transcribeAndArchiveVoice(

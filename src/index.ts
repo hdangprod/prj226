@@ -65,7 +65,7 @@ export default {
     if (captures.length > 0) {
       try {
         await batchCommitCaptures(captures, env);
-        await d1.deletePendingCaptures(captures.map(c => c.id));
+        await d1.markCapturesFlushed(captures.map(c => c.id));
         console.log(JSON.stringify({
           event: 'cron_flush_success',
           captures_flushed: captures.length,

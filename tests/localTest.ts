@@ -77,13 +77,14 @@ async function runTests() {
   }
 
   // ─── TEST 1: Intent Taxonomy Verification ────────────────────────────────
-  assert(INTENTS.length === 6, 'Intent taxonomy contains exactly 6 PRD intents');
+  assert(INTENTS.length === 7, 'Intent taxonomy contains exactly 7 intents');
   assert(INTENTS.includes('Daily_Focus'), 'Contains Daily_Focus intent');
   assert(INTENTS.includes('Task_Capture'), 'Contains Task_Capture intent');
   assert(INTENTS.includes('Reschedule'), 'Contains Reschedule intent');
   assert(INTENTS.includes('Knowledge_Search'), 'Contains Knowledge_Search intent');
   assert(INTENTS.includes('Rescue_Mode'), 'Contains Rescue_Mode intent');
   assert(INTENTS.includes('Session_Handoff'), 'Contains Session_Handoff intent');
+  assert(INTENTS.includes('Inbox_Organize'), 'Contains Inbox_Organize intent');
 
   // ─── TEST 2: Hono App Webhook Secret Validation ─────────────────────────
   const unauthorizedReq = new Request('http://localhost/webhook', {

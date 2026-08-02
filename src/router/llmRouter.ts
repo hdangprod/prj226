@@ -12,6 +12,7 @@
 
 import { generateText, generateObject } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 import type { ZodSchema } from 'zod';
 import type { Env } from '../config';
 
@@ -43,13 +44,25 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // ─── Provider Factory ────────────────────────────────────────────────────────
-type Provider = 'google' | 'openai' | 'anthropic';
+type Provider = 'google' | 'openai' | 'anthropic' | 'openrouter';
 
 function createModel(provider: Provider, modelId: string, apiKey: string) {
+  const cleanKey = (apiKey || '').trim();
   switch (provider) {
     case 'google': {
-      const google = createGoogleGenerativeAI({ apiKey });
+      const google = createGoogleGenerativeAI({ apiKey: cleanKey });
       return google(modelId);
+    }
+    case 'openrouter': {
+      const openrouter = createOpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: cleanKey,
+        headers: {
+          'HTTP-Referer': 'https://github.com/hdangprod/prj226',
+          'X-Title': 'PRJ226 Liam AIOS',
+        },
+      });
+      return openrouter(modelId);
     }
     case 'openai':
     case 'anthropic':
@@ -66,13 +79,16 @@ export class LLMRouter {
   private readonly proModel: ReturnType<typeof createModel>;
 
   constructor(env: Env) {
-    const fastProvider = (env.LLM_FAST_PROVIDER || 'google') as Provider;
-    const proProvider = (env.LLM_PRO_PROVIDER || 'google') as Provider;
+    const rawKey = (env.OPENROUTER_API_KEY || env.LLM_FAST_API_KEY || env.LLM_PRO_API_KEY || env.GEMINI_API_KEY || '').trim();
+    const defaultProvider = env.OPENROUTER_API_KEY ? 'openrouter' : 'google';
+    const fastProvider = (env.LLM_FAST_PROVIDER || defaultProvider) as Provider;
+    const proProvider = (env.LLM_PRO_PROVIDER || defaultProvider) as Provider;
 
-    const apiKey = env.LLM_FAST_API_KEY || env.LLM_PRO_API_KEY || env.GEMINI_API_KEY || '';
+    const fastKey = (env.LLM_FAST_API_KEY || rawKey).trim();
+    const proKey = (env.LLM_PRO_API_KEY || rawKey).trim();
 
-    this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'gemini-2.0-flash-lite', env.LLM_FAST_API_KEY || apiKey);
-    this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'gemini-2.5-flash', env.LLM_PRO_API_KEY || apiKey);
+    this.fastModel = createModel(fastProvider, env.LLM_FAST_MODEL || 'google/gemini-3.5-flash-lite', fastKey);
+    this.proModel = createModel(proProvider, env.LLM_PRO_MODEL || 'google/gemini-3.6-flash', proKey);
   }
 
   /** Fast model: intent routing, task extraction, text parsing */
@@ -108,11 +124,9 @@ export class LLMRouter {
         model: this.proModel,
         prompt,
         system,
-        maxTokens: 4096,
+        maxTokens: 2048,
       });
       return result.text;
     });
   }
-
-
 }

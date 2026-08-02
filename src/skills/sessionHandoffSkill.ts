@@ -3,7 +3,7 @@
  * Intent: Session_Handoff
  *
  * Saves working memory snapshot at end of day.
- * Reads current in-progress tasks, asks LLM to summarize, stores in Neon.
+ * Reads current in-progress tasks, asks LLM to summarize, stores in Cloudflare D1.
  */
 
 import type { SkillContext } from '../governance/intentRouter';

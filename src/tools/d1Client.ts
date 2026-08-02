@@ -6,6 +6,8 @@ export interface PendingCapture {
   source: string;
   file_path: string;
   created_at: string;
+  status?: string;
+  organized_path?: string;
 }
 
 export interface Task {
@@ -106,7 +108,7 @@ export class D1Client {
 
   async getPendingCaptures(limit: number = 50): Promise<PendingCapture[]> {
     return withRetry(async () => {
-      const stmt = this.env.DB.prepare('SELECT * FROM pending_captures ORDER BY created_at ASC LIMIT ?').bind(limit);
+      const stmt = this.env.DB.prepare("SELECT * FROM pending_captures WHERE status = 'raw' ORDER BY created_at ASC LIMIT ?").bind(limit);
       const res = await stmt.all<PendingCapture>();
       return res.results || [];
     });
@@ -415,6 +417,44 @@ export class D1Client {
       const stmt = this.env.DB.prepare(
         `INSERT OR REPLACE INTO pending_embeddings (chunk_id, content, github_path, status) VALUES (?, ?, ?, 'quota_deferred')`
       ).bind(chunkId, content, githubPath);
+      await stmt.run();
+    });
+  }
+
+  // Inbox Organize: get raw/flushed inbox captures
+  async getInboxCaptures(limit: number = 5): Promise<PendingCapture[]> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        "SELECT * FROM pending_captures WHERE status IN ('raw','flushed') AND file_path LIKE 'inbox/%' ORDER BY created_at DESC LIMIT ?"
+      ).bind(limit);
+      const res = await stmt.all<PendingCapture>();
+      return res.results || [];
+    });
+  }
+
+  async getCaptureById(id: string): Promise<PendingCapture | null> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('SELECT * FROM pending_captures WHERE id = ?').bind(id);
+      return await stmt.first<PendingCapture>() ?? null;
+    });
+  }
+
+  async updateCaptureStatus(id: string, status: string, organizedPath?: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        'UPDATE pending_captures SET status = ?, organized_path = ? WHERE id = ?'
+      ).bind(status, organizedPath || null, id);
+      await stmt.run();
+    });
+  }
+
+  async markCapturesFlushed(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    return withRetry(async () => {
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = this.env.DB.prepare(
+        `UPDATE pending_captures SET status = 'flushed' WHERE id IN (${placeholders})`
+      ).bind(...ids);
       await stmt.run();
     });
   }

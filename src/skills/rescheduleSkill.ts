@@ -34,7 +34,7 @@ export async function handleReschedule(ctx: SkillContext): Promise<void> {
     'Extract: task name, new date (YYYY-MM-DD), or number of days to postpone. Return JSON.',
   );
 
-  // Find task in Neon using the public findTasksByName method
+  // Find task in Cloudflare D1 using the public findTasksByName method
   const matchingTasks = await d1.findTasksByName(extracted.taskName, 3);
 
   if (matchingTasks.length === 0) {

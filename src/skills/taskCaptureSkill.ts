@@ -2,7 +2,7 @@
  * PRJ226 v3.0: Task Capture Skill
  * Intent: Task_Capture
  *
- * Parses natural language task from user message, creates task in Neon DB.
+ * Parses natural language task from user message, creates task in Cloudflare D1.
  * Battle-tested logic ported from v2.0 taskCaptureSkill.
  */
 
@@ -20,6 +20,8 @@ const TaskSchema = z.object({
   description: z.string().optional(),
 });
 
+import { getLocalDate } from '../lib/dateUtils';
+
 export async function handleTaskCapture(ctx: SkillContext): Promise<void> {
   const { chatId, userText, env } = ctx;
   const d1 = new D1Client(env);
@@ -27,7 +29,7 @@ export async function handleTaskCapture(ctx: SkillContext): Promise<void> {
 
   await sendMessage(chatId, '✍️ <i>Capturing your task...</i>', env);
 
-  const today = new Date().toISOString().split('T')[0];
+  const { dateStr: today, timePart } = getLocalDate();
 
   const extracted = await llm.callFastStructured(
     `Extract task details from: "${userText}"\nToday is ${today}.`,
@@ -47,15 +49,11 @@ export async function handleTaskCapture(ctx: SkillContext): Promise<void> {
   const priority = extracted.priority ?? 'medium';
   const priorityEmoji = { high: '🔴', medium: '🟡', low: '🟢' }[priority] ?? '⚫';
 
-  const timePart = new Date().toTimeString().split(' ')[0].replace(/:/g, '');
   const url = `obsidian://new?vault=hdangprod_wiki&file=inbox/${today}/${timePart}&content=${encodeURIComponent(userText)}`;
   
-  await sendMessageWithKeyboard(
+  await sendMessage(
     chatId,
-    `✅ <b>Task captured!</b>\n\n${priorityEmoji} <b>${extracted.name}</b>${priority !== 'medium' ? ` [${priority.toUpperCase()}]` : ''}${extracted.estimate_hours ? `\n⏱ Estimate: ${extracted.estimate_hours}h` : ''}${extracted.scheduled_date ? `\n📅 Scheduled: ${extracted.scheduled_date}` : ''}\n<i>ID: ${taskId.substring(0, 8)}...</i>`,
-    {
-      inline_keyboard: [[{ text: '📝 Open in Obsidian', url }]]
-    },
+    `✅ <b>Task captured!</b>\n\n${priorityEmoji} <b>${extracted.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</b>${priority !== 'medium' ? ` [${priority.toUpperCase()}]` : ''}${extracted.estimate_hours ? `\n⏱ Estimate: ${extracted.estimate_hours}h` : ''}${extracted.scheduled_date ? `\n📅 Scheduled: ${extracted.scheduled_date}` : ''}\n<i>ID: ${taskId.substring(0, 8)}...</i>\n\n📝 <a href="${url}">Open in Obsidian</a>`,
     env,
   );
 }
