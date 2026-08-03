@@ -17,7 +17,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 | **Layer 1: Identity & Rules** | `@AGENTS.md`<br>`@.agents/rules/github-workflow.md` | `Always On` | System identity, positive MUST-FOLLOW rules, negative NEVER-DO restrictions, Git/PR SOP. |
 | **Layer 2: Memory & Context** | `@docs/sitemap.md`<br>`@docs/spec.md`<br>`@docs/agents/context.md` | `On-Demand` | Master lazy-loading sitemap index, complete technical spec, 5-Layer system & DB schemas. |
 | **Layer 3: Workflows & SOPs** | `@.agents/workflows/bug-hunting.md`<br>`@.agents/workflows/deploy-check.md` | `On-Demand` | 4-step bug triage & remediation, Cloudflare Workers pre-deploy checklist. |
-| **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@src/skills/` | `On-Demand` | Multi-agent execution loop, 6 PRD skill intents (Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff). |
+| **Layer 4: Modular Skills** | `@.agents/skills/orchestrator/SKILL.md`<br>`@.agents/skills/*/SKILL.md`<br>`@src/skills/` | `On-Demand` | PRJ226 orchestrator delegation layer + 7 PRD skill intents (Daily_Focus, Task_Capture, Reschedule, Knowledge_Search, Rescue_Mode, Session_Handoff, Inbox_Organize) + 21 production-grade agent skills (`skills-lock.json` tracks sources). Orchestrator delegates each lifecycle phase to the generic skills and owns only PRJ226 gates (Confidence/HITL, retry<=3 escalation, doc cascade, evals). |
 | **Layer 5: Tools & Integrations**| `@src/tools/`<br>`@src/router/llmRouter.ts`<br>`@src/lib/`<br>`@.agents/rules-manifest.json` | `On-Demand` | Dynamic rule engine, provider-agnostic LLMRouter, D1 client, Vectorize client, GitBatch client, GitHubReader, Telegram client. |
 | **Issue Plans & Solutions** | `@docs/plans/issue-[ID]/` | `Task-Scoped` | Pre-execution plan (`plan.md`) and detailed solution report (`solution_report.md`). |
 
@@ -29,6 +29,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 .
 ├── AGENTS.md                          # [AIOS Layer 1] System identity & core directives
 ├── wrangler.toml                      # Cloudflare Worker configuration (D1, Vectorize, AI, KV, Crons)
+├── skills-lock.json                   # Installed agent-skills source & hash lockfile
 ├── .agents/
 │   ├── rules/
 │   │   ├── github-workflow.md         # [AIOS Layer 1 - Always On] Git, branching, commit & PR rules
@@ -38,9 +39,20 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── rules-manifest.json            # [SSOT] Dynamic rule mapping manifest
 │   ├── scripts/
 │   │   └── rule-engine.js             # [Core Engine] CLI rule resolver
-│   └── workflows/
-│       ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
-│       └── deploy-check.md            # [AIOS Layer 3 - On-Demand] Cloudflare Workers pre-deploy checklist
+│   ├── workflows/
+│   │   ├── bug-hunting.md             # [AIOS Layer 3 - On-Demand] Bug triage & remediation workflow
+│   │   └── deploy-check.md            # [AIOS Layer 3 - On-Demand] Cloudflare Workers pre-deploy checklist
+│   └── skills/                        # 21 agent skills (addyosmani/agent-skills) + orchestrator
+│       ├── orchestrator/              # PRJ226 orchestrator delegation layer (thin; delegates to generic skills)
+│       ├── using-agent-skills/        # Meta: which skill applies
+│       ├── spec-driven-development/
+│       ├── planning-and-task-breakdown/
+│       ├── incremental-implementation/
+│       ├── test-driven-development/
+│       ├── debugging-and-error-recovery/
+│       ├── code-review-and-quality/
+│       ├── security-and-hardening/
+│       └── ...                        # full lifecycle: define → plan → build → verify → review → ship
 ├── docs/
 │   ├── sitemap.md                     # [AIOS Layer 2] Master AI & System sitemap
 │   ├── index.md                       # [AIOS Layer 2] Master knowledge base index
@@ -55,17 +67,19 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │       ├── issue-56/                  # PRJ226 v4.1 Obsidian Edge Stack Migration (D1, Vectorize, Workers AI)
 │       ├── issue-59/                  # PRJ226 v4.1.1 Edge Stack Hardening & Strict Dev/Prod Isolation
 │       ├── issue-61/                  # PRJ226 v4.2 Inbox Organizer with Knowledge Graph Connections
-│       └── issue-63/                  # PRJ226 v4.2.1 Universal Zero-Loss Ingestion & 0-Results Search UX Fallback
+│       ├── issue-63/                  # PRJ226 v4.2.1 Universal Zero-Loss Ingestion & 0-Results Search UX Fallback
+│       └── issue-64/                  # PRJ226 v4.3 Self-Evaluation Reflection Loop & Nightly Prompt Optimizer
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts
 ├── tests/
-│   └── localTest.ts                   # v4.1 Offline integration test harness (28 tests)
+│   └── localTest.ts                   # v4.3 Offline integration test harness (45 tests)
 ├── migrations/                        # Cloudflare D1 SQL Migrations
 │   ├── 0001_init.sql                  # [Historical] Initial schema
 │   ├── 0002_v4_edge_stack.sql         # [Historical] D1 SQLite + FTS5 initial schema
 │   ├── 0003_v4_1_1_edge_patches.sql   # [Historical] System state, inbox logs, deferred queues schema
-│   └── 0004_inbox_organize.sql        # [Active] Pending captures status lifecycle & organized path schema
+│   ├── 0004_inbox_organize.sql        # [Active] Pending captures status lifecycle & organized path schema
+│   └── 0005_eval_history.sql          # [Active] Self-Evaluation Reflection Loop tables (eval_history, eval_iterations, prompt_versions)
 └── src/                               # TypeScript application source code
     ├── index.ts                       # Hono entrypoint & routing initialization
     ├── config.ts                      # Cloudflare Workers environment bindings & type contracts
@@ -75,6 +89,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   ├── embeddings.ts              # Workers AI embeddings & SHA-256 content hash
     │   ├── chunking.ts                # Heading-based Markdown chunker & frontmatter parser
     │   ├── hybridSearch.ts            # RRF (Reciprocal Rank Fusion) hybrid search engine
+    │   ├── querySanitizer.ts          # Natural language query keyword extractor & FTS5 sanitizer
+    │   ├── reflectionLoop.ts          # Self-Evaluation Generate→Judge→Refine pipeline with token tracking
     │   ├── fetchUtils.ts              # Resilient fetchWithRetry helper
     │   └── dateUtils.ts               # UTC+7 local date & time path generator
     ├── indexers/
@@ -90,14 +106,15 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   ├── gitBatchClient.ts          # GitHub Git Data API batch commit client
     │   ├── githubClient.ts            # GitHub Git Data API blob reader (GitHubReader)
     │   └── telegramClient.ts          # Telegram Bot API client (fetch-native)
-    ├── skills/                        # 7 PRD skill handlers
+    ├── skills/                        # 7 PRD skill handlers + nightly optimizer
     │   ├── dailyFocusSkill.ts
     │   ├── taskCaptureSkill.ts
     │   ├── rescheduleSkill.ts
     │   ├── knowledgeSearchSkill.ts
     │   ├── rescueModeSkill.ts
     │   ├── sessionHandoffSkill.ts
-    │   └── inboxOrganizeSkill.ts
+    │   ├── inboxOrganizeSkill.ts
+    │   └── nightlyOptimizer.ts        # Cron: analyzes failed eval traces & proposes prompt improvements
     └── types/
         └── index.ts                   # Re-exported type definitions hub
 ```

@@ -1,4 +1,6 @@
-You are the Adversarial System Architect Agent "GRILL ME". Your objective is to critique raw features, expose design flaws, and break assumptions before writing code.
+# PRJ226 Interrogation Lens (used WITH `interview-me` / `idea-refine`)
+
+The interrogation phase is delegated to **`interview-me`** (grill the user) or **`idea-refine`** (vague concept). This file supplies the PRJ226-specific adversarial lens those skills apply, plus the Confidence Score gate.
 
 ### OPERATIONAL MANDATE
 1. Analyze the User's raw PRD/Idea input against the existing codebase architecture (4-Layer System).
@@ -14,6 +16,6 @@ Where:
 - R (0-100): Structural Failure Risk (Score 100 if missing exponential backoffs, data drops, or stateless tracking).
 
 ### HITL PROTOCOL GATEWAY
-- Calculate the numerical value explicitly. 
+- Calculate the numerical value explicitly.
 - IF CONFIDENCE IS LESS THAN 90%: You MUST trigger the Human-In-The-Loop gate. Output `[HITL_TRIGGER: CONFIDENCE_BELOW_90]` followed by the calculated score and explanation. Stop all automation immediately.
 - IF CONFIDENCE IS 90% OR GREATER: Output the final spec document and an explicit independent Markdown Task List containing decoupled technical steps for execution.
