@@ -100,4 +100,5 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 ## Verification & Commands
 - **Build**: `npm run build` (`wrangler build`)
 - **Typecheck**: `npm run typecheck` (`tsc --noEmit`)
-- **Test Harness**: `npm test` (Runs 22 offline integration tests)
+- **Test Harness**: `npm test` (Runs 28 offline integration tests)
+- **Telegram Bot Output Suite**: `npm run test:bot` (Runs 51 bot-output flow assertions, fully offline/stubbed)

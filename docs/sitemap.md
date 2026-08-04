@@ -73,7 +73,8 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── golden-dataset.json
 │   └── run-evals.ts
 ├── tests/
-│   └── localTest.ts                   # v4.3 Offline integration test harness (45 tests)
+│   ├── localTest.ts                   # v4.3 Offline integration test harness (28 assertions)
+│   └── telegramBotFlows.test.ts       # v4.3 Telegram bot output suite (51 assertions; npm run test:bot)
 ├── migrations/                        # Cloudflare D1 SQL Migrations
 │   ├── 0001_init.sql                  # [Historical] Initial schema
 │   ├── 0002_v4_edge_stack.sql         # [Historical] D1 SQLite + FTS5 initial schema
