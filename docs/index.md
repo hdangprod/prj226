@@ -27,3 +27,4 @@ Welcome to the PRJ226 (Liam Persona - AI-Native Second Brain) Documentation Inde
 - [`docs/plans/issue-56/plan.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/plans/issue-56/plan.md) — PRJ226 v4.1 Obsidian Edge Stack Migration Plan
 - [`docs/plans/issue-56/solution_report.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/plans/issue-56/solution_report.md) — PRJ226 v4.1 Solution & Completion Report
 - [`docs/plans/issue-67/plan.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/plans/issue-67/plan.md) — Whole-Picture Knowledge Search (query sanitizer + topic census + reindex self-heal)
+- [`docs/plans/issue-67/solution_report.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/plans/issue-67/solution_report.md) — Whole-Picture Knowledge Search: Completion & Solution Report
