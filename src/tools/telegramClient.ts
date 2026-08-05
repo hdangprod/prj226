@@ -37,23 +37,36 @@ async function callTelegramAPI(
   return response;
 }
 
+export interface TelegramMessageOptions {
+  disableWebPagePreview?: boolean;
+  parseMode?: 'HTML' | 'MarkdownV2';
+}
+
+/**
+ * Escapes special characters for Telegram MarkdownV2 formatting.
+ * Reserved characters: _ * [ ] ( ) ~ ` > # + - = | { } . !
+ */
+export function escapeMarkdownV2(text: string): string {
+  return text.replace(/[_*\[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Send a plain or HTML-formatted message.
+ * Send a plain, HTML, or MarkdownV2 formatted message.
  * Automatically truncates to Telegram's 4096 char limit.
  */
 export async function sendMessage(
   chatId: number,
   text: string,
   env: Env,
-  options?: { disableWebPagePreview?: boolean },
+  options?: TelegramMessageOptions,
 ): Promise<void> {
   const truncated = text.length > 4096 ? text.substring(0, 4093) + '...' : text;
   await callTelegramAPI('sendMessage', {
     chat_id: chatId,
     text: truncated,
-    parse_mode: 'HTML',
+    parse_mode: options?.parseMode ?? 'HTML',
     disable_web_page_preview: options?.disableWebPagePreview ?? true,
   }, env);
 }
@@ -68,13 +81,14 @@ export async function sendMessageWithKeyboard(
     inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>>;
   },
   env: Env,
+  options?: TelegramMessageOptions,
 ): Promise<void> {
   const truncated = text.length > 4096 ? text.substring(0, 4093) + '...' : text;
   await callTelegramAPI('sendMessage', {
     chat_id: chatId,
     text: truncated,
-    parse_mode: 'HTML',
-    disable_web_page_preview: true,
+    parse_mode: options?.parseMode ?? 'HTML',
+    disable_web_page_preview: options?.disableWebPagePreview ?? true,
     reply_markup: keyboard,
   }, env);
 }
@@ -102,14 +116,15 @@ export async function editMessageText(
   messageId: number,
   text: string,
   env: Env,
+  options?: TelegramMessageOptions,
 ): Promise<void> {
   const truncated = text.length > 4096 ? text.substring(0, 4093) + '...' : text;
   await callTelegramAPI('editMessageText', {
     chat_id: chatId,
     message_id: messageId,
     text: truncated,
-    parse_mode: 'HTML',
-    disable_web_page_preview: true,
+    parse_mode: options?.parseMode ?? 'HTML',
+    disable_web_page_preview: options?.disableWebPagePreview ?? true,
   }, env);
 }
 
