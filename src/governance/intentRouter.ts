@@ -110,6 +110,22 @@ export async function handleWorkerPayload(
       userText.trim().toLowerCase(),
     );
 
+  // Support /search <query> explicit control command
+  const trimmedText = userText.trim();
+  if (trimmedText.toLowerCase().startsWith('/search')) {
+    const query = trimmedText.replace(/^\/search\s*/i, '').trim();
+    const searchQuery = query || 'PRJ226';
+    await dispatchToSkill(
+      { intent: 'Knowledge_Search', confidence: 100, extracted: { searchQuery } },
+      chatId,
+      searchQuery,
+      update as unknown as TelegramUpdate,
+      env,
+      captureId,
+    );
+    return;
+  }
+
   if (!isControlCommand) {
     try {
       const d1 = new D1Client(env);
@@ -336,6 +352,25 @@ async function handleCallbackQuery(
         {} as unknown as TelegramUpdate,
         env,
       );
+    }
+  }
+
+  if (data.startsWith('view_chunk:')) {
+    const chunkId = data.replace('view_chunk:', '');
+    const d1 = new D1Client(env);
+    const chunks = await d1.getChunksByIds([chunkId]);
+    if (chunks.length > 0) {
+      const c = chunks[0];
+      const title = c.title || c.github_path || 'Snippet';
+      const cleanPath = (c.github_path || '').replace(/\.md$/, '');
+      const obsidianUrl = `obsidian://open?vault=hdangprod_wiki&file=${encodeURIComponent(cleanPath)}`;
+      await sendMessage(
+        chatId,
+        `📄 <code>${escapeHtml(title)}</code>\n\n<pre>${escapeHtml(c.content)}</pre>\n\n📝 <b>Open in Obsidian:</b>\n<code>${obsidianUrl}</code>`,
+        env,
+      );
+    } else {
+      await sendMessage(chatId, '⚠️ Snippet not found.', env);
     }
   }
 }

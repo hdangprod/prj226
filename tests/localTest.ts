@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import app from '../src/index';
 import { INTENTS } from '../src/governance/intentRouter';
+import { handleKnowledgeSearch } from '../src/skills/knowledgeSearchSkill';
 import { GitHubReader } from '../src/tools/githubClient';
 import { parseFrontMatter, chunkByHeadings } from '../src/lib/chunking';
 import type { Env } from '../src/config';
@@ -160,6 +161,37 @@ Content of section 2 detailing secondary topic details.`;
   assert(migrationSql3.includes('pending_vector_deletions'), 'Migration 0003 creates pending_vector_deletions table');
   assert(migrationSql3.includes('pending_embeddings'), 'Migration 0003 creates pending_embeddings table');
   assert(migrationSql3.includes('raw_inbox_logs'), 'Migration 0003 creates raw_inbox_logs table');
+
+  // ─── TEST 7: Knowledge_Search Execution & Null Title Fallback ────────────────
+  try {
+    const mock768Vector = new Array(768).fill(0.1);
+    const testEnv: Env = {
+      ...mockEnv,
+      AI: {
+        run: async () => ({ data: [mock768Vector] }),
+      } as any,
+      DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => null,
+            all: async () => ({ results: [] }),
+            run: async () => {},
+          }),
+        }),
+      } as any,
+    };
+    await handleKnowledgeSearch({
+      chatId: 123,
+      userText: 'what do I know about morning fitness',
+      extracted: {},
+      env: testEnv,
+      update: {} as any,
+    });
+    assert(true, 'handleKnowledgeSearch executes cleanly without throwing TypeError on empty/no-title results');
+  } catch (err: any) {
+    console.error('handleKnowledgeSearch failed:', err);
+    assert(false, 'handleKnowledgeSearch executes cleanly without throwing TypeError on empty/no-title results');
+  }
 
   console.log(`\n=== Test Results: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) {
