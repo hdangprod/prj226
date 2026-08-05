@@ -390,13 +390,17 @@ export class D1Client {
              title=excluded.title, content=excluded.content, content_hash=excluded.content_hash, tags=excluded.tags, updated_at=CURRENT_TIMESTAMP`
           ).bind(c.id, c.githubPath, c.chunkIndex, c.title, c.content, c.contentHash, c.tags)
         );
+        // FTS5 virtual tables do NOT support `ON CONFLICT DO UPDATE` (UPSERT not
+        // implemented for virtual tables). Maintain the index with delete + insert,
+        // binding the FTS rowid to the note_chunks_cache rowid so content resolves.
+        statements.push(
+          this.env.DB.prepare('DELETE FROM note_chunks_fts WHERE id = ?').bind(c.id)
+        );
         statements.push(
           this.env.DB.prepare(
-            `INSERT INTO note_chunks_fts (id, title, content)
-             VALUES (?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-             title=excluded.title, content=excluded.content`
-          ).bind(c.id, c.title || '', c.content)
+            `INSERT INTO note_chunks_fts(rowid, id, title, content)
+             SELECT rowid, ?, ?, ? FROM note_chunks_cache WHERE id = ?`
+          ).bind(c.id, c.title || '', c.content, c.id)
         );
       }
       const BATCH_LIMIT = 50;

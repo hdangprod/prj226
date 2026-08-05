@@ -12,6 +12,11 @@ import { upsertVectors, deleteVectors } from '../tools/vectorizeClient';
 import { D1Client } from '../tools/d1Client';
 import { GitHubReader } from '../tools/githubClient';
 
+// Bounded per-invocation workload: a full resync of a large wiki exceeds the
+// Worker subrequest budget in a single run, so the audit drains across crons.
+const MAX_FILES_PER_RUN = 6;
+const REINDEX_QUEUE_KEY = 'reindex_remaining_files';
+
 export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: number; errors: number }> {
   const d1 = new D1Client(env);
   const githubReader = new GitHubReader(env);
@@ -39,34 +44,20 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
     return { processed: 0, errors: 1 };
   }
 
-  if (lastIndexedSha === currentHeadSha) {
+  // A resync is in progress when no baseline exists (fresh/cleared index) or a
+  // persisted drain queue is present.
+  const isResync = !lastIndexedSha;
+  const queueRow = await env.DB.prepare('SELECT value FROM system_state WHERE key = ?').bind(REINDEX_QUEUE_KEY).first<{ value: string }>();
+  const queuedRaw = queueRow?.value || '';
+
+  if (lastIndexedSha === currentHeadSha && !queuedRaw) {
     return { processed: 0, errors: 0 }; // 100% up to date
-  }
-
-  // 3. Compare commits to extract changed markdown files; when there is no
-  //    recorded baseline (fresh or manually cleared index), fall back to a full
-  //    tree audit so a stale/cleared index heals itself instead of staying empty.
-  let changedFiles: Array<{ filename: string; status: 'added' | 'modified' | 'removed' }> = [];
-
-  if (lastIndexedSha) {
-    try {
-      const compareRes = await fetchWithRetry(`${baseUrl}/compare/${lastIndexedSha}...${currentHeadSha}`, { headers });
-      const compareData = (await compareRes.json()) as { files?: Array<{ filename: string; status: string }> };
-      changedFiles = (compareData.files || [])
-        .filter((f) => f.filename.endsWith('.md'))
-        .map((f) => ({
-          filename: f.filename,
-          status: f.status === 'removed' ? 'removed' : 'modified',
-        }));
-    } catch (err) {
-      console.warn('[Reconciler] Compare API failed; performing full tree audit:', err);
-    }
   }
 
   // Resolve the current repo tree once (path → blob SHA). This powers both the
   // per-file content fetch (GitHubReader.fetchBlob requires a blob SHA) and the
   // full tree audit below.
-  let fileShas = new Map<string, string>();
+  const fileShas = new Map<string, string>();
   try {
     const commitRes = await fetchWithRetry(`${baseUrl}/git/commits/${currentHeadSha}`, { headers });
     const commitData = (await commitRes.json()) as { tree: { sha: string } };
@@ -80,17 +71,48 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
     return { processed: 0, errors: 1 };
   }
 
-  if (changedFiles.length === 0) {
+  // 3. Decide this run's work: (a) drain a persisted resync queue in bounded
+  // batches, (b) start a fresh resync from a full-tree audit, or (c) process the
+  // small incremental diff when a baseline exists.
+  let workFiles: Array<{ filename: string; status: 'added' | 'modified' | 'removed' }> = [];
+  let remainingFiles: string[] = [];
+
+  if (queuedRaw) {
+    try {
+      const parsed = JSON.parse(queuedRaw);
+      remainingFiles = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      remainingFiles = [];
+    }
+    const batch = remainingFiles.slice(0, MAX_FILES_PER_RUN);
+    remainingFiles = remainingFiles.slice(batch.length);
+    workFiles = batch.map((f) => ({ filename: f, status: 'modified' as const }));
+    console.log(JSON.stringify({ event: 'reconciler_resync_batch', batch: workFiles.length, remaining: remainingFiles.length }));
+  } else if (isResync) {
     const auditFiles = Array.from(fileShas.keys()).filter((p) => p.endsWith('.md'));
-    changedFiles = auditFiles.map((f) => ({ filename: f, status: 'modified' as const }));
-    console.log(JSON.stringify({ event: 'reconciler_full_audit', files: changedFiles.length }));
+    remainingFiles = auditFiles.slice(MAX_FILES_PER_RUN);
+    workFiles = auditFiles.slice(0, MAX_FILES_PER_RUN).map((f) => ({ filename: f, status: 'modified' as const }));
+    console.log(JSON.stringify({ event: 'reconciler_full_audit', files: auditFiles.length, batch: workFiles.length }));
+  } else {
+    try {
+      const compareRes = await fetchWithRetry(`${baseUrl}/compare/${lastIndexedSha}...${currentHeadSha}`, { headers });
+      const compareData = (await compareRes.json()) as { files?: Array<{ filename: string; status: string }> };
+      workFiles = (compareData.files || [])
+        .filter((f) => f.filename.endsWith('.md'))
+        .map((f) => ({
+          filename: f.filename,
+          status: f.status === 'removed' ? 'removed' as const : 'modified' as const,
+        }));
+    } catch (err) {
+      console.warn('[Reconciler] Compare API failed; processing nothing this run:', err);
+    }
   }
 
   let processedCount = 0;
   let errorCount = 0;
 
   // 4. Re-index missing/modified notes without duplicating existing vectors
-  for (const file of changedFiles) {
+  for (const file of workFiles) {
     try {
       if (file.status === 'removed') {
         const existingChunks = await d1.getChunkHashesByPath(file.filename);
@@ -166,11 +188,19 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
     }
   }
 
-  // 5. Update last_indexed_commit_sha in D1 system_state
-  await env.DB.prepare(
-    `INSERT INTO system_state (key, value, updated_at) VALUES ('last_indexed_commit_sha', ?, CURRENT_TIMESTAMP)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
-  ).bind(currentHeadSha).run();
+  // 5. Persist the remaining resync queue, or finalize the sync when drained.
+  if (remainingFiles.length > 0) {
+    await env.DB.prepare(
+      `INSERT INTO system_state (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+    ).bind(REINDEX_QUEUE_KEY, JSON.stringify(remainingFiles)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM system_state WHERE key = ?').bind(REINDEX_QUEUE_KEY).run();
+    await env.DB.prepare(
+      `INSERT INTO system_state (key, value, updated_at) VALUES ('last_indexed_commit_sha', ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+    ).bind(currentHeadSha).run();
+  }
 
   return { processed: processedCount, errors: errorCount };
 }
