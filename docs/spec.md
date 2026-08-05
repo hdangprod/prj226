@@ -29,7 +29,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 ## Database Schema (Cloudflare D1: `migrations/0002_v4_edge_stack.sql`, `migrations/0003_v4_1_1_edge_patches.sql` & `migrations/0004_inbox_organize.sql`)
 - **`processed_updates`**: Global idempotency table (`update_id` BIGINT PK).
 - **`raw_inbox_logs`**: Durable synchronous Telegram update log (`update_id`, `payload`, `status`, `error`, `created_at`).
-- **`pending_captures`**: Staging queue for rapid Telegram captures (`id`, `content`, `source`, `file_path`, `created_at`, `status`, `organized_path`). Status lifecycle: `'raw'` → `'flushed'` → `'organized'` → `'archived'`.
+- **`pending_captures`**: Staging queue for rapid Telegram captures (`id`, `content`, `source`, `file_path`, `created_at`, `status`, `organized_path`, `needs_review`). Status lifecycle: `'raw'` → `'flushed'` → `'organized'` → `'archived'`. `needs_review` (default 1) marks unprocessed/low-confidence prompts; `/inbox` lists only `needs_review = 1` captures, and successful skill dispatch clears it while GitHub archival still applies to every capture.
 - **`pending_embeddings`**: Staging queue for Workers AI quota-deferred chunk embeddings (`chunk_id`, `content`, `github_path`, `status`, `created_at`).
 - **`pending_vector_deletions`**: Staging queue for retrying failed Vectorize deletes (`id`, `vector_id`, `github_path`, `created_at`).
 - **`system_state`**: Key-value table tracking `last_indexed_commit_sha` for the reconciliation cron (`key`, `value`, `updated_at`).
@@ -70,7 +70,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `intentRouter.ts`: Evaluates intent across 7 categories using LLMRouter. Confidence ≥ 95% dispatches to Skill. Confidence < 95% auto-captures thought to `pending_captures` AND presents HITL clarification keyboard with Obsidian deep link.
 
 ### 3. LLM Router & Embeddings (`src/router/`, `src/lib/`)
-- `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`), supporting a single unified API key (`GEMINI_API_KEY`, `LLM_FAST_API_KEY`, or `LLM_PRO_API_KEY`) for both models.
+- `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`), supporting a single unified API key (`GEMINI_API_KEY`, `LLM_FAST_API_KEY`, or `LLM_PRO_API_KEY`) for both models. Auto-retries transient upstream failures (429 rate limits + 5xx overload, e.g. OpenRouter 503) with exponential backoff.
 - `embeddings.ts`: Workers AI `@cf/baai/bge-base-en-v1.5` 768-dim embedding generator + SHA-256 content hash namespacing.
 - `chunking.ts`: Markdown H2 heading chunker.
 - `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3).

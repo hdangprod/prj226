@@ -19,6 +19,7 @@
 
 import { z } from 'zod';
 import type { Env } from '../config';
+import { BOT_MESSAGES } from '../constants/messages';
 import { LLMRouter } from '../router/llmRouter';
 import { D1Client } from '../tools/d1Client';
 import { sendMessage, sendMessageWithKeyboard } from '../tools/telegramClient';
@@ -132,8 +133,7 @@ export async function handleWorkerPayload(
     );
   } catch (err: any) {
     console.error('[IntentRouter] Classification failed:', err);
-    const errMsg = err?.message || String(err);
-    await sendMessage(chatId, `⚠️ <b>Classification Error:</b>\n<code>${errMsg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>`, env);
+    await sendMessage(chatId, BOT_MESSAGES.ERRORS.LLM_TRANSIENT, env);
     return;
   }
 
@@ -190,6 +190,16 @@ async function dispatchToSkill(
         break;
       default:
         await sendMessage(chatId, "❓ I wasn't sure how to handle that. Could you rephrase?", env);
+    }
+
+    // Successfully handled → remove from the /inbox queue.
+    // Failed/low-confidence captures keep needs_review = 1 and stay in inbox.
+    if (captureId) {
+      try {
+        await new D1Client(env).markCaptureProcessed(captureId);
+      } catch (markErr) {
+        console.warn('[IntentRouter] Failed to mark capture processed:', markErr);
+      }
     }
   } catch (err) {
     console.error(`[IntentRouter] Skill execution error (${classification.intent}):`, err);

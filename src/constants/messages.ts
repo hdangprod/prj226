@@ -26,6 +26,7 @@ export const BOT_MESSAGES = {
     PLAN_CANCELLED_NEW_COMMAND: '⚠️ Đã hủy tạo task do phát hiện lệnh mới.',
     PLAN_EDIT_DISCARDED: '✏️ Plan discarded. Send <code>/weekly_planning &lt;your revised plan&gt;</code> to try again.',
     UNKNOWN_COMMAND: 'Unknown command. Available:\n/add_task /today /rescue /highlight /weekly_planning /weekly_report',
+    LLM_TRANSIENT: '⏳ <b>The AI service is temporarily overloaded.</b> Please retry your message in a moment.',
     INVALID_NUMBER: '⚠️ Vui lòng nhập số hợp lệ hoặc gõ \'skip\'.',
     CONNECTION_FAILURE: '⚠️ Connection Failure: Unable to fetch your calendar. Please verify your environment variables or re-authenticate.',
   },

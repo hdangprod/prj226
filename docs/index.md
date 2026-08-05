@@ -7,6 +7,9 @@ Welcome to the PRJ226 (Liam Persona - AI-Native Second Brain) Documentation Inde
 - [`docs/sitemap.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/sitemap.md) — AI & System Sitemap
 - [`docs/agents/context.md`](file:///Users/dangnguyen/Desktop/PRJ226/docs/agents/context.md) — Architecture & Database Reference
 
+## Dev Tooling
+- [`scripts/seed-dev.sql`](file:///Users/dangnguyen/Desktop/PRJ226/scripts/seed-dev.sql) — Wipes & seeds demo data in `prj226-brain-dev` (dev ONLY)
+
 ## Architecture Overview
 - **Human Interface & SOT**: Obsidian Local Vault (Markdown `.md`)
 - **Remote Cold Storage**: GitHub Repository (`hdangprod/hdangprod_wiki`)

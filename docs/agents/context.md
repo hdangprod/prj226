@@ -48,6 +48,7 @@ PRJ226 (Liam v4.1) is an AI-Native Second Brain & Personal OS built on a serverl
 - `file_path` (TEXT)
 - `status` (TEXT - `'raw'`, `'flushed'`, `'organized'`, `'archived'`)
 - `organized_path` (TEXT - e.g. `wiki/architecture/zero-cold-start.md`)
+- `needs_review` (INTEGER - `1` = unprocessed/low-confidence, listed by `/inbox`; `0` = successfully handled)
 - `created_at` (TIMESTAMPTZ)
 
 ### `note_chunks_cache`
@@ -61,7 +62,7 @@ PRJ226 (Liam v4.1) is an AI-Native Second Brain & Personal OS built on a serverl
 - `updated_at` (TIMESTAMPTZ)
 
 ### `note_chunks_fts` (FTS5 Virtual Table)
-- Synchronized with `note_chunks_cache` via triggers (`chunks_ai`, `chunks_ad`, `chunks_au`).
+- Synchronized with `note_chunks_cache` via triggers (`chunks_ai`, `chunks_ad`, `chunks_au`) in migration 0002. *(Note: migration 0003 drops these triggers; the indexer and `scripts/seed-dev.sql` maintain FTS5 explicitly.)*
 
 ### `tasks`
 - `id` (TEXT, Primary Key)

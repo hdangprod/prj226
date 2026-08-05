@@ -80,12 +80,15 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │   ├── 0002_v4_edge_stack.sql         # [Historical] D1 SQLite + FTS5 initial schema
 │   ├── 0003_v4_1_1_edge_patches.sql   # [Historical] System state, inbox logs, deferred queues schema
 │   ├── 0004_inbox_organize.sql        # [Active] Pending captures status lifecycle & organized path schema
-│   └── 0005_eval_history.sql          # [Active] Self-Evaluation Reflection Loop tables (eval_history, eval_iterations, prompt_versions)
+│   ├── 0005_eval_history.sql          # [Active] Self-Evaluation Reflection Loop tables (eval_history, eval_iterations, prompt_versions)
+│   └── 0006_capture_needs_review.sql  # [Active] needs_review flag: keeps only unprocessed/low-confidence prompts in /inbox
+├── scripts/
+│   └── seed-dev.sql                   # [Dev] Wipes + seeds realistic demo data in prj226-brain-dev (dev ONLY)
 └── src/                               # TypeScript application source code
     ├── index.ts                       # Hono entrypoint & routing initialization
     ├── config.ts                      # Cloudflare Workers environment bindings & type contracts
     ├── router/
-    │   └── llmRouter.ts               # Provider-agnostic LLM router (Vercel AI SDK)
+    │   └── llmRouter.ts               # Provider-agnostic LLM router (Vercel AI SDK); auto-retries transient 429/5xx
     ├── lib/
     │   ├── embeddings.ts              # Workers AI embeddings & SHA-256 content hash
     │   ├── chunking.ts                # Heading-based Markdown chunker & frontmatter parser

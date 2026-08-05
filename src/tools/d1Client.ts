@@ -421,11 +421,11 @@ export class D1Client {
     });
   }
 
-  // Inbox Organize: get raw/flushed inbox captures
+  // Inbox Organize: get unprocessed raw/flushed inbox captures only
   async getInboxCaptures(limit: number = 5): Promise<PendingCapture[]> {
     return withRetry(async () => {
       const stmt = this.env.DB.prepare(
-        "SELECT * FROM pending_captures WHERE status IN ('raw','flushed') AND file_path LIKE 'inbox/%' ORDER BY created_at DESC LIMIT ?"
+        "SELECT * FROM pending_captures WHERE status IN ('raw','flushed') AND file_path LIKE 'inbox/%' AND needs_review = 1 ORDER BY created_at DESC LIMIT ?"
       ).bind(limit);
       const res = await stmt.all<PendingCapture>();
       return res.results || [];
@@ -442,8 +442,16 @@ export class D1Client {
   async updateCaptureStatus(id: string, status: string, organizedPath?: string): Promise<void> {
     return withRetry(async () => {
       const stmt = this.env.DB.prepare(
-        'UPDATE pending_captures SET status = ?, organized_path = ? WHERE id = ?'
+        'UPDATE pending_captures SET status = ?, organized_path = ?, needs_review = 0 WHERE id = ?'
       ).bind(status, organizedPath || null, id);
+      await stmt.run();
+    });
+  }
+
+  /** Marks a capture as successfully handled so it leaves the /inbox queue. */
+  async markCaptureProcessed(id: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('UPDATE pending_captures SET needs_review = 0 WHERE id = ?').bind(id);
       await stmt.run();
     });
   }
