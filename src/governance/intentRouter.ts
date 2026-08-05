@@ -155,6 +155,18 @@ export async function handleWorkerPayload(
 
 // ─── Skill Dispatcher ───────────────────────────────────────────────────────────
 
+const SKILL_TIMEOUT_MS = 30000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Skill execution timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 async function dispatchToSkill(
   classification: IntentResponse,
   chatId: number,
@@ -166,31 +178,7 @@ async function dispatchToSkill(
   const ctx = { chatId, userText, extracted: classification.extracted ?? {}, env, update, captureId };
 
   try {
-    switch (classification.intent) {
-      case 'Daily_Focus':
-        await handleDailyFocus(ctx);
-        break;
-      case 'Task_Capture':
-        await handleTaskCapture(ctx);
-        break;
-      case 'Reschedule':
-        await handleReschedule(ctx);
-        break;
-      case 'Knowledge_Search':
-        await handleKnowledgeSearch(ctx);
-        break;
-      case 'Rescue_Mode':
-        await handleRescueMode(ctx);
-        break;
-      case 'Session_Handoff':
-        await handleSessionHandoff(ctx);
-        break;
-      case 'Inbox_Organize':
-        await handleInboxOrganize(ctx);
-        break;
-      default:
-        await sendMessage(chatId, "❓ I wasn't sure how to handle that. Could you rephrase?", env);
-    }
+    await withTimeout(executeSkill(classification, ctx, chatId, env), SKILL_TIMEOUT_MS);
 
     // Successfully handled → remove from the /inbox queue.
     // Failed/low-confidence captures keep needs_review = 1 and stay in inbox.
@@ -208,6 +196,39 @@ async function dispatchToSkill(
       '⚠️ System busy, please retry in a moment.',
       env,
     );
+  }
+}
+
+async function executeSkill(
+  classification: IntentResponse,
+  ctx: SkillContext,
+  chatId: number,
+  env: Env,
+): Promise<void> {
+  switch (classification.intent) {
+    case 'Daily_Focus':
+      await handleDailyFocus(ctx);
+      break;
+    case 'Task_Capture':
+      await handleTaskCapture(ctx);
+      break;
+    case 'Reschedule':
+      await handleReschedule(ctx);
+      break;
+    case 'Knowledge_Search':
+      await handleKnowledgeSearch(ctx);
+      break;
+    case 'Rescue_Mode':
+      await handleRescueMode(ctx);
+      break;
+    case 'Session_Handoff':
+      await handleSessionHandoff(ctx);
+      break;
+    case 'Inbox_Organize':
+      await handleInboxOrganize(ctx);
+      break;
+    default:
+      await sendMessage(chatId, "❓ I wasn't sure how to handle that. Could you rephrase?", env);
   }
 }
 

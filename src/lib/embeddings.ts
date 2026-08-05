@@ -1,12 +1,26 @@
 import type { Env } from '../config';
 
+const EMBED_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Embedding request timed out after ${ms}ms`));
+    }, ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 /**
  * Embeds text using Cloudflare Workers AI embedding model.
  */
 export async function embedText(text: string, env: Env): Promise<number[]> {
   const model = env.EMBEDDING_MODEL || '@cf/baai/bge-base-en-v1.5';
   try {
-    const response = await env.AI.run(model as any, { text: [text] });
+    const response = await withTimeout(env.AI.run(model as any, { text: [text] }), EMBED_TIMEOUT_MS);
     const vector = (response as any)?.data?.[0];
     if (!vector || !Array.isArray(vector) || vector.length !== 768) {
       throw new Error(`Invalid vector embedding output format or length (expected 768, got ${vector?.length})`);
