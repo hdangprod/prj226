@@ -9,9 +9,12 @@
 import type { SkillContext } from '../governance/intentRouter';
 import { D1Client } from '../tools/d1Client';
 import { LLMRouter } from '../router/llmRouter';
-import { sendMessage, sendMessageWithKeyboard } from '../tools/telegramClient';
+import { sendMessage, sendMessageWithKeyboard, escapeMarkdownV2 } from '../tools/telegramClient';
 import { embedText } from '../lib/embeddings';
 import { hybridSearch } from '../lib/hybridSearch';
+import { extractSearchKeywords } from '../lib/querySanitizer';
+
+const CENSUS_CAP = 13; // fetch cap+1 to detect truncation
 
 export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
   const { chatId, userText, env } = ctx;
@@ -20,12 +23,16 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
 
   await sendMessage(chatId, '🔍 <i>Searching your knowledge base...</i>', env);
 
-  // Generate query embedding
-  const embedding = await embedText(userText, env);
+  // Normalize the conversational query into a clean topic + FTS-safe query
+  const { cleanTopic, ftsQuery } = extractSearchKeywords(userText);
+  const searchTopic = cleanTopic || userText;
 
-  // RRF hybrid search
+  // Generate query embedding from the clean topic (not the full spoken phrase)
+  const embedding = await embedText(searchTopic, env);
+
+  // RRF hybrid search (FTS uses the sanitized OR-query so keyword hits surface too)
   await sendMessage(chatId, '🧠 <i>Calculating relevance scores...</i>', env);
-  const results = await hybridSearch(userText, embedding, env);
+  const results = await hybridSearch(searchTopic, embedding, env, ftsQuery);
 
   if (results.length === 0) {
     let captureId = ctx.captureId;
@@ -66,44 +73,102 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
   const resultIds = results.map(r => r.id);
   const chunks = await d1.getChunksByIds(resultIds);
 
-  // Re-order chunks based on search result order
-  const orderedChunks = results.map(r => chunks.find(c => c.id === r.id)).filter(c => c != null) as any[];
+  // Re-order chunks based on search result order and attach relevance percentage
+  const orderedChunks = results
+    .map(r => {
+      const chunk = chunks.find(c => c.id === r.id);
+      return chunk ? { ...chunk, relevancePercent: r.relevancePercent } : null;
+    })
+    .filter(c => c != null) as any[];
 
-  // Synthesize a cited summary
+  // Topic census: every distinct file related to the topic (path + FTS match),
+  // giving the user the "whole picture" of sources stored in their wiki.
+  let relatedFiles: Array<{ github_path: string; matchCount: number }> = [];
+  try {
+    relatedFiles = await d1.searchRelatedFiles(searchTopic, ftsQuery, CENSUS_CAP);
+  } catch (err) {
+    console.warn(JSON.stringify({ warning: 'Topic census failed, falling back to top chunks only', error: String(err) }));
+  }
+
+  const fileCount = relatedFiles.length > 0 ? relatedFiles.length : orderedChunks.length;
+  const countStr = `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+
+  // Synthesize a cited summary from the top semantic chunks
   const sourceContext = orderedChunks
     .map(
       (c, i) =>
-        `[Source ${i + 1}] ${c.title || c.file_path}:\n${c.content.substring(0, 300)}...`,
+        `[Source ${i + 1}] ${c.title || c.github_path || c.file_path || 'Untitled'}:\n${(c.content || '').substring(0, 300)}...`,
     )
     .join('\n\n');
 
   const summary = await llm.callPro(
-    `The user asked: "${userText}"\n\nRelevant sources found:\n${sourceContext}\n\nWrite a concise, cited answer (2-3 sentences) referencing the source numbers. Use HTML formatting.`,
-    'You are Liam, a precise AI second brain. Answer grounded in the provided sources only. Do not hallucinate.',
+    `The user asked: "${userText}"\nTopic: "${searchTopic}"\n\nRelevant sources found (${countStr}):\n${sourceContext}\n\nWrite a concise summary (1-2 sentences). Bold key topics using <b>bold text</b>. Reference sources using [1], [2], etc.\n\nCRITICAL RULES:\n- ALWAYS acknowledge the found results explicitly (e.g. "I found ${countStr} for <b>${escapeHtml(searchTopic)}</b> in your wiki.").\n- If the sources contain specific facts, include a brief 1-sentence synthesis of those facts.\n- NEVER say "I have no information", "no details found", or "I currently have no information regarding X" when sources ARE listed!`,
+  'You are Liam, a precise AI second brain. Always state clearly that results were found in the notes. Never claim no information exists when sources are provided.',
   );
 
-  // Build source links and callback keyboard
+  // Deterministic result acknowledgment — independent of LLM compliance, so the
+  // user ALWAYS sees the actual result count even if the model denies having any.
+  const ackSentence = `I have found ${countStr} about <b>${escapeHtml(searchTopic)}</b> in your wiki.`;
+
+  // Strip any contradictory "no information / couldn't find / no results" phrasing
+  // the model may produce despite results being present, so it cannot override reality.
+  const synthesis = stripNoInformation(summary);
+  const finalSummary = synthesis ? `${ackSentence}\n\n${synthesis}` : ackSentence;
+
+  // Convert any Markdown **bold** or *bold* in synthesis to HTML <b>bold</b> for clean Telegram rendering
+  const formattedSummary = finalSummary
+    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^\*])\*([^\*]+)\*([^\*]|$)/g, '$1<b>$2</b>$3');
+
+  // Build source links and callback keyboard (HTML)
   const keyboardRows: Array<Array<{ text: string; callback_data?: string }>> = [];
   let sourceLinks = '';
+  let sourceIdx = 0;
 
   for (const c of orderedChunks.slice(0, 4)) {
-    const titleText = c.title ? c.title.substring(0, 25) : c.file_path.substring(0, 25);
-    const vault = 'hdangprod_wiki';
-    const cleanPath = (c.file_path || '').replace(/\.md$/, '');
-    const url = `obsidian://open?vault=${vault}&file=${encodeURIComponent(cleanPath)}`;
+    sourceIdx++;
+    const filePath = c.github_path || c.file_path || '';
+    
+    let displayTitle = '';
+    if (c.title) {
+      displayTitle = c.title.length > 35 ? c.title.substring(0, 32) + '...' : c.title;
+    } else if (filePath) {
+      displayTitle = filePath;
+    } else {
+      displayTitle = 'Untitled Note';
+    }
 
-    sourceLinks += `\n• 📝 <a href="${url}">${titleText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>`;
+    const pctStr = c.relevancePercent ? ` (${c.relevancePercent}%)` : '';
+    const formattedTitle = displayTitle.endsWith('.md') || displayTitle.includes('/') ? `<code>${escapeHtml(displayTitle)}</code>` : escapeHtml(displayTitle);
+
+    sourceLinks += `\n📄 [${sourceIdx}] ${formattedTitle}${pctStr}`;
+    
+    const buttonTitle = displayTitle.length > 25 ? displayTitle.substring(0, 22) + '...' : displayTitle;
     keyboardRows.push([
       {
-        text: `🔍 View snippet: ${titleText}`,
+        text: `🔍 [${sourceIdx}] ${buttonTitle}${pctStr}`,
         callback_data: `view_chunk:${c.id}`,
       }
     ]);
   }
 
+  // Whole-picture census: every related file rendered as a GitHub link
+  let censusBlock = '';
+  if (relatedFiles.length > 0) {
+    const wikiBase = `https://github.com/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/blob/main/`;
+    const shown = relatedFiles.slice(0, 12);
+    const lines = shown.map(
+      (f) => `📄 <a href="${wikiBase}${encodeURI(f.github_path)}">${escapeHtml(f.github_path)}</a>`,
+    );
+    const truncated = relatedFiles.length > shown.length;
+    censusBlock =
+      `\n\n📚 <b>Related files (${fileCount}):</b>\n${lines.join('\n')}` +
+      (truncated ? `\n<i>+${relatedFiles.length - shown.length} more</i>` : '');
+  }
+
   await sendMessageWithKeyboard(
     chatId,
-    `🔍 <b>Knowledge Search Results</b>\n\n${summary}${sourceLinks ? `\n\n<b>Sources:</b>${sourceLinks}` : ''}`,
+    `🔍 <b>Knowledge Search Results</b>\n\n${formattedSummary}${sourceLinks ? `\n\n<b>Sources:</b>${sourceLinks}` : ''}${censusBlock}`,
     { inline_keyboard: keyboardRows as any },
     env,
   );
@@ -111,4 +176,18 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function stripNoInformation(text: string): string {
+  return text
+    .split('\n')
+    .filter(
+      line =>
+        !/no (?:specific |further |prior |more )?information/i.test(line) &&
+        !/nothing (?:found|to report|relevant)/i.test(line) &&
+        !/(?:couldn'?t|cannot|can'?t|didn'?t|have no) (?:find|find anything|locate)/i.test(line) &&
+        !/no (?:results?|details?) (?:were )?(?:found|available)/i.test(line),
+    )
+    .join('\n')
+    .trim();
 }

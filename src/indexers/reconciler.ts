@@ -43,7 +43,9 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
     return { processed: 0, errors: 0 }; // 100% up to date
   }
 
-  // 3. Compare commits to extract changed markdown files
+  // 3. Compare commits to extract changed markdown files; when there is no
+  //    recorded baseline (fresh or manually cleared index), fall back to a full
+  //    tree audit so a stale/cleared index heals itself instead of staying empty.
   let changedFiles: Array<{ filename: string; status: 'added' | 'modified' | 'removed' }> = [];
 
   if (lastIndexedSha) {
@@ -58,7 +60,22 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
         }));
     } catch (err) {
       console.warn('[Reconciler] Compare API failed; performing full tree audit:', err);
-      lastIndexedSha === ''; // Fallback to full tree scan
+    }
+  }
+
+  if (changedFiles.length === 0) {
+    try {
+      const commitRes = await fetchWithRetry(`${baseUrl}/git/commits/${currentHeadSha}`, { headers });
+      const commitData = (await commitRes.json()) as { tree: { sha: string } };
+      const treeRes = await fetchWithRetry(`${baseUrl}/git/trees/${commitData.tree.sha}?recursive=1`, { headers });
+      const treeData = (await treeRes.json()) as { tree: Array<{ path: string; type: string }> };
+      changedFiles = treeData.tree
+        .filter((n) => n.type === 'blob' && n.path.endsWith('.md'))
+        .map((f) => ({ filename: f.path, status: 'modified' as const }));
+      console.log(JSON.stringify({ event: 'reconciler_full_audit', files: changedFiles.length }));
+    } catch (err) {
+      console.error('[Reconciler Error] Full tree audit failed:', err);
+      return { processed: 0, errors: 1 };
     }
   }
 

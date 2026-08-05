@@ -8,7 +8,7 @@ PRJ226 (Liam v4.1) is an AI-Native Second Brain & Personal OS built on a serverl
 - **GitHub Cold Storage Backup (`hdangprod/hdangprod_wiki`)**: Canonical remote repository.
 - **Fast Ingestion Staging**: Telegram captures write to D1 `pending_captures` (< 50ms).
 - **Batched Git Sync**: 5-minute Cron Trigger bundles pending captures into 1 Git commit via GitHub Git Data API.
-- **Edge Read-Through Cache**: GitHub push webhooks update Cloudflare Vectorize (768-dim) and Cloudflare D1 (`note_chunks_cache` + FTS5). Hot path queries hit Edge Cache in < 25ms with 0 GitHub API reads.
+- **Edge Read-Through Cache**: GitHub push webhooks update Cloudflare Vectorize (768-dim) and Cloudflare D1 (`note_chunks_cache` + FTS5). Hot path queries hit Edge Cache in < 25ms with 0 GitHub API reads. The 5-minute reconciliation cron self-heals dropped webhooks; a cleared/stale `last_indexed_commit_sha` triggers a full-tree re-index.
 
 ## 2. 5-Layer Closed-Loop System Architecture
 

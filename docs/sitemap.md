@@ -68,7 +68,9 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
 │       ├── issue-59/                  # PRJ226 v4.1.1 Edge Stack Hardening & Strict Dev/Prod Isolation
 │       ├── issue-61/                  # PRJ226 v4.2 Inbox Organizer with Knowledge Graph Connections
 │       ├── issue-63/                  # PRJ226 v4.2.1 Universal Zero-Loss Ingestion & 0-Results Search UX Fallback
-│       └── issue-64/                  # PRJ226 v4.3 Self-Evaluation Reflection Loop & Nightly Prompt Optimizer
+│       ├── issue-64/                  # PRJ226 v4.3 Self-Evaluation Reflection Loop & Nightly Prompt Optimizer
+│       ├── issue-65/                  # PRJ226 Knowledge Search TypeError & Callback Handler Hotfix
+│       └── issue-67/                  # PRJ226 Whole-Picture Knowledge Search (sanitizer + topic census + reindex self-heal)
 ├── evals/                             # 22 Golden Commands dataset & eval runner
 │   ├── golden-dataset.json
 │   └── run-evals.ts

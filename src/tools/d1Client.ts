@@ -328,6 +328,33 @@ export class D1Client {
     });
   }
 
+  /**
+   * Topic census: every distinct file that mentions the topic (FTS5 content match)
+   * or whose path contains it (e.g. `tasks/2026-08-03-prj226-roadmap.md`). Returns
+   * the "whole picture" of related sources, ranked by how many chunks matched.
+   */
+  async searchRelatedFiles(topic: string, ftsQuery: string, cap: number = 12): Promise<Array<{ github_path: string; matchCount: number }>> {
+    return withRetry(async () => {
+      const ftsClause = ftsQuery.trim()
+        ? ` OR id IN (SELECT id FROM note_chunks_fts WHERE note_chunks_fts MATCH ?)`
+        : '';
+      const params: (string | number)[] = [`%${topic}%`];
+      if (ftsQuery.trim()) params.push(ftsQuery);
+      params.push(cap);
+
+      const stmt = this.env.DB.prepare(
+        `SELECT github_path, COUNT(*) AS match_count
+         FROM note_chunks_cache
+         WHERE github_path LIKE ?${ftsClause}
+         GROUP BY github_path
+         ORDER BY match_count DESC
+         LIMIT ?`
+      ).bind(...params);
+      const res = await stmt.all<{ github_path: string; match_count: number }>();
+      return (res.results || []).map((r) => ({ github_path: r.github_path, matchCount: Number(r.match_count) }));
+    });
+  }
+
   // FTS5 Search
   async ftsSearch(query: string, limit: number = 20): Promise<Array<{ id: string; title: string; rank: number }>> {
     return withRetry(async () => {

@@ -73,7 +73,8 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`), supporting a single unified API key (`GEMINI_API_KEY`, `LLM_FAST_API_KEY`, or `LLM_PRO_API_KEY`) for both models. Auto-retries transient upstream failures (429 rate limits + 5xx overload, e.g. OpenRouter 503) with exponential backoff.
 - `embeddings.ts`: Workers AI `@cf/baai/bge-base-en-v1.5` 768-dim embedding generator + SHA-256 content hash namespacing.
 - `chunking.ts`: Markdown H2 heading chunker.
-- `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3).
+- `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3). Accepts a sanitized FTS query separately from the semantic query so keyword hits surface without conversational-noise pollution.
+- `querySanitizer.ts`: Normalizes conversational queries (`"what do you know about PRJ226"` → `PRJ226`) into a clean topic for embedding + an OR-joined FTS5 query.
 - `dateUtils.ts`: Centralized UTC+7 local timezone date formatting.
 
 ### 4. Tool Layer (`src/tools/`)
@@ -85,12 +86,13 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 
 ### 5. Indexer (`src/indexers/`)
 - `vaultIndexer.ts`: GitHub push webhook handler (`POST /github-webhook`) verifying HMAC-SHA256 signatures, diffing chunk content hashes, and upserting into D1 `note_chunks_cache` + Vectorize.
+- `reconciler.ts`: Cron reconciliation that diff-compares `last_indexed_commit_sha` against GitHub HEAD; when no baseline exists (cleared/stale index) it performs a **full-tree audit** and re-indexes every `.md` file so the cache self-heals instead of silently staying empty.
 
 ### 6. Skills Layer (`src/skills/`)
 - `dailyFocusSkill.ts`: Synthesizes actionable tasks + working memory for daily focus briefings.
 - `taskCaptureSkill.ts`: Natural language task extraction to D1 `tasks` table + Obsidian deep link button.
 - `rescheduleSkill.ts`: Dependency-aware task rescheduling with conflict warnings.
-- `knowledgeSearchSkill.ts`: Zero GitHub API call hot-path search reading directly from D1 `note_chunks_cache` + Obsidian deep link buttons.
+- `knowledgeSearchSkill.ts`: Zero GitHub API call hot-path search reading directly from D1 `note_chunks_cache` + Obsidian deep link buttons. Sanitizes the query, then renders a cited summary from top semantic chunks PLUS a whole-picture **topic census** (`searchRelatedFiles`) listing every related file as a verifiable GitHub link.
 - `rescueModeSkill.ts`: Quick-win task filter (estimate ≤ 0.5h).
 - `sessionHandoffSkill.ts`: Session working memory snapshot recorder.
 - `inboxOrganizeSkill.ts`: 3-phase inbox review and organization workflow (list cards → AI draft with top-5 Vectorize [[WikiLinks]] → commit & index).
