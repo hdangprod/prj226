@@ -78,7 +78,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `dateUtils.ts`: Centralized UTC+7 local timezone date formatting.
 
 ### 4. Tool Layer (`src/tools/`)
-- `d1Client.ts`: Cloudflare D1 prepared statement client with exponential backoff & jitter.
+- `d1Client.ts`: Cloudflare D1 prepared statement client with exponential backoff & jitter. `bulkUpsertNoteChunksAndFts` maintains the FTS5 index with delete+insert (virtual tables reject `ON CONFLICT DO UPDATE`) binding FTS rowids to `note_chunks_cache` rowids.
 - `vectorizeClient.ts`: Cloudflare Vectorize upsert/delete client (100-item batching).
 - `gitBatchClient.ts`: GitHub Git Data API batch commit engine (flushes `pending_captures` to GitHub in 1 commit) + `deleteGitHubFile`.
 - `githubClient.ts`: GitHub Git Data API blob reader (`GitHubReader`) and OKF document parser.
@@ -86,7 +86,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 
 ### 5. Indexer (`src/indexers/`)
 - `vaultIndexer.ts`: GitHub push webhook handler (`POST /github-webhook`) verifying HMAC-SHA256 signatures, diffing chunk content hashes, and upserting into D1 `note_chunks_cache` + Vectorize.
-- `reconciler.ts`: Cron reconciliation that diff-compares `last_indexed_commit_sha` against GitHub HEAD; when no baseline exists (cleared/stale index) it performs a **full-tree audit** and re-indexes every `.md` file so the cache self-heals instead of silently staying empty.
+- `reconciler.ts`: Cron reconciliation that diff-compares `last_indexed_commit_sha` against GitHub HEAD; when no baseline exists (cleared/stale index) it performs a **full-tree audit** and drains the re-index in bounded batches (`reindex_remaining_files` queue, 6 files/run) so the cache self-heals without exceeding the Worker subrequest budget.
 
 ### 6. Skills Layer (`src/skills/`)
 - `dailyFocusSkill.ts`: Synthesizes actionable tasks + working memory for daily focus briefings.
