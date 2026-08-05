@@ -26,14 +26,15 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
       return await fn();
     } catch (err: unknown) {
       lastError = err;
-      const isRateLimit =
-        typeof err === 'object' &&
-        err !== null &&
-        'status' in err &&
-        (err as { status: number }).status === 429;
-      if (isRateLimit && attempt < RETRY_DELAYS_MS.length) {
+      const status =
+        typeof err === 'object' && err !== null && 'status' in err
+          ? (err as { status: number }).status
+          : 0;
+      // Transient failures: 429 rate limit + 5xx upstream overload/errors (e.g. 503).
+      const isTransient = status === 429 || (status >= 500 && status < 600);
+      if (isTransient && attempt < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[attempt];
-        console.warn(`[LLMRouter] Rate limit hit. Retrying in ${delay}ms (attempt ${attempt + 1})...`);
+        console.warn(`[LLMRouter] Transient failure (status ${status}). Retrying in ${delay}ms (attempt ${attempt + 1})...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         throw err;

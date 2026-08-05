@@ -82,6 +82,7 @@ const fixtures: any = {
   capture: null,
   ftsResults: [],
   vectorMatches: [],
+  relatedFiles: [],
 };
 
 const mockEnv: Env = {
@@ -164,6 +165,7 @@ D1Client.prototype.getDependentTasks = async (): Promise<unknown[]> => fixtures.
 D1Client.prototype.getInboxCaptures = async (): Promise<unknown[]> => fixtures.inboxCaptures;
 D1Client.prototype.getCaptureById = async (): Promise<unknown> => fixtures.capture ?? null;
 D1Client.prototype.getChunksByIds = async (): Promise<unknown[]> => fixtures.chunksByIds ?? [];
+D1Client.prototype.searchRelatedFiles = async (): Promise<unknown[]> => fixtures.relatedFiles ?? [];
 
 function resetFixtures() {
   fixtures.intent = 'Task_Capture';
@@ -184,6 +186,7 @@ function resetFixtures() {
   fixtures.ftsResults = [];
   fixtures.vectorMatches = [];
   fixtures.chunksByIds = [];
+  fixtures.relatedFiles = [];
   sent.length = 0;
 }
 
@@ -326,7 +329,63 @@ async function main() {
     check(!!withKeyboard, 'sends inline keyboard with source actions');
   });
 
-  // 8. Session Handoff
+  // 8. Knowledge Search (FTS-only noise dropped when Vectorize corroborates hits)
+  await runScenario('Knowledge_Search: FTS-only inbox noise excluded from sources', async () => {
+    fixtures.intent = 'Knowledge_Search';
+    fixtures.vectorMatches = [{ id: 'c1', score: 0.77 }];
+    fixtures.ftsResults = [{ id: 'c1', rank: 1 }, { id: 'c2', rank: 2 }];
+    fixtures.chunksByIds = [
+      { id: 'c1', github_path: 'wiki/health/morning-fitness.md', title: 'Morning Fitness Routine', content: '30-minute bodyweight circuit at 6 AM, four days a week.', tags: null, updated_at: '2026-01-01' },
+      { id: 'c2', github_path: 'inbox/2026-08-05/101649.md', title: null, content: 'Scanned a fitness article.', tags: null, updated_at: '2026-08-05' },
+    ];
+    fixtures.proText = 'Morning Fitness Routine [Source 1].';
+    await handleWorkerPayload(textMsg('what do I know about morning fitness'), mockEnv);
+    const t = lastText();
+    check(t.includes('I have found 1 file about <b>morning fitness</b> in your wiki.'), 'counts only corroborated result');
+    check(t.includes('Morning Fitness Routine'), 'shows the real semantic source');
+    check(!t.includes('101649'), 'excludes FTS-only inbox noise not corroborated by Vectorize');
+  });
+
+  // 9. Knowledge Search (LLM denies info despite results → deterministic ack overrides)
+  await runScenario('Knowledge_Search: LLM "no information" contradiction is overridden', async () => {
+    fixtures.intent = 'Knowledge_Search';
+    fixtures.vectorMatches = [{ id: 'c1', score: 0.94 }];
+    fixtures.chunksByIds = [
+      { id: 'c1', github_path: 'inbox/2026-08-05/101529.md', title: null, content: 'PRJ226 notes content.', tags: null, updated_at: '2026-08-05' },
+    ];
+    fixtures.proText = 'I currently have no specific information regarding the contents of PRJ226 [1].';
+    await handleWorkerPayload(textMsg('search about PRJ226'), mockEnv);
+    const t = lastText();
+    check(t.includes('Knowledge Search Results'), 'replies results header');
+    check(t.includes('I have found 1 file about <b>PRJ226</b> in your wiki.'), 'emits deterministic found-ack now showing result count');
+    check(!t.includes('have no specific information'), 'strips contradictory "no information" claim');
+    check(t.includes('Sources:'), 'still lists the actual source');
+  });
+
+  // 9b. Knowledge Search (whole-picture topic census → lists all related files as GitHub links)
+  await runScenario('Knowledge_Search: topic census lists all related files with GitHub links', async () => {
+    fixtures.intent = 'Knowledge_Search';
+    fixtures.vectorMatches = [{ id: 'c1', score: 0.96 }];
+    fixtures.chunksByIds = [
+      { id: 'c1', github_path: 'wiki/projects/prj226-second-brain.md', title: 'PRJ226 Second Brain', content: 'PRJ226 orchestrates an Obsidian vault on the edge stack.', tags: null, updated_at: '2026-08-05' },
+    ];
+    fixtures.relatedFiles = [
+      { github_path: 'tasks/2026-08-03-prj226-roadmap.md', matchCount: 2 },
+      { github_path: 'tasks/2026-08-03-doing-competitive-research-for-prj226.md', matchCount: 1 },
+      { github_path: 'wiki/projects/prj226-competitor-benchmark.md', matchCount: 1 },
+    ];
+    fixtures.proText = 'PRJ226 orchestrates an Obsidian second brain [1].';
+    await handleWorkerPayload(textMsg('what do you know about PRJ226'), mockEnv);
+    const t = lastText();
+    check(t.includes('I have found 3 files about <b>PRJ226</b> in your wiki.'), 'ack counts every related file (whole picture)');
+    check(t.includes('Related files (3):'), 'renders census header with file count');
+    check(t.includes('tasks/2026-08-03-prj226-roadmap.md'), 'lists prj226 roadmap task file');
+    check(t.includes('tasks/2026-08-03-doing-competitive-research-for-prj226.md'), 'lists competitive-research task file');
+    check(t.includes('wiki/projects/prj226-competitor-benchmark.md'), 'lists competitor-benchmark wiki file');
+    check(t.includes('hdangprod_wiki/blob/main/'), 'source links point to the wiki repo for verification');
+  });
+
+  // 10. Session Handoff
   await runScenario('Session_Handoff: saves summary', async () => {
     fixtures.intent = 'Session_Handoff';
     fixtures.actionableTasks = [
@@ -339,7 +398,7 @@ async function main() {
     check(t.includes('Wrapped up the auth flow'), 'includes LLM handoff summary');
   });
 
-  // 9. Reschedule success
+  // 11. Reschedule success
   await runScenario('Reschedule: task found, no deps → rescheduled', async () => {
     fixtures.intent = 'Reschedule';
     fixtures.matchingTasks = [
@@ -366,7 +425,7 @@ async function main() {
     check(!!withKeyboard, 'sends force/cancel keyboard');
   });
 
-  // 11. Reschedule task not found
+  // 13. Reschedule task not found
   await runScenario('Reschedule: task not found', async () => {
     fixtures.intent = 'Reschedule';
     fixtures.matchingTasks = [];
@@ -389,7 +448,7 @@ async function main() {
   await runScenario('Classification: LLM outage → friendly error', async () => {
     fixtures.classificationError = true;
     await handleWorkerPayload(textMsg('hello there'), mockEnv);
-    check(lastText().includes('Classification Error'), 'replies with Classification Error');
+    check(lastText().includes('temporarily overloaded'), 'replies gracefull with transient LLM error');
   });
 
   // 14. Inbox Organize empty
@@ -428,7 +487,7 @@ async function main() {
     check(lastText().includes('Capture not found'), 'reports capture not found');
   });
 
-  // 18. Callback: task_from_inbox → converts to task
+  // 19. Callback: task_from_inbox → converts to task
   await runScenario('Callback: task_from_inbox → task capture', async () => {
     fixtures.capture = { id: 'cap1', content: 'Buy groceries on the way home', source: 'telegram', file_path: 'inbox/2026-08-04/11-00.md', created_at: '2026-08-04T11:00:00Z', status: 'raw' };
     fixtures.taskExtract = { name: 'Buy groceries', priority: 'medium', estimate_hours: null, scheduled_date: null };
@@ -437,14 +496,14 @@ async function main() {
     check(lastText().includes('Buy groceries'), 'extracts task name from capture');
   });
 
-  // 19. Empty text dropped silently
+  // 21. Empty text dropped silently
   await runScenario('Guard: empty text payload dropped', async () => {
     sent.length = 0;
     await handleWorkerPayload({ message: { text: '', chat: { id: CHAT_ID } } }, mockEnv);
     check(sent.length === 0, 'sends no Telegram message for empty text');
   });
 
-  // 20. Callback: cancel_organize
+  // 22. Callback: cancel_organize
   await runScenario('Callback: cancel_organize → cancelled', async () => {
     await handleWorkerPayload(callbackMsg('cancel_organize:cap1'), mockEnv);
     check(lastText().includes('Organization cancelled'), 'replies cancelled');

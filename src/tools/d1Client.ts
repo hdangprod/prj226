@@ -328,6 +328,33 @@ export class D1Client {
     });
   }
 
+  /**
+   * Topic census: every distinct file that mentions the topic (FTS5 content match)
+   * or whose path contains it (e.g. `tasks/2026-08-03-prj226-roadmap.md`). Returns
+   * the "whole picture" of related sources, ranked by how many chunks matched.
+   */
+  async searchRelatedFiles(topic: string, ftsQuery: string, cap: number = 12): Promise<Array<{ github_path: string; matchCount: number }>> {
+    return withRetry(async () => {
+      const ftsClause = ftsQuery.trim()
+        ? ` OR id IN (SELECT id FROM note_chunks_fts WHERE note_chunks_fts MATCH ?)`
+        : '';
+      const params: (string | number)[] = [`%${topic}%`];
+      if (ftsQuery.trim()) params.push(ftsQuery);
+      params.push(cap);
+
+      const stmt = this.env.DB.prepare(
+        `SELECT github_path, COUNT(*) AS match_count
+         FROM note_chunks_cache
+         WHERE github_path LIKE ?${ftsClause}
+         GROUP BY github_path
+         ORDER BY match_count DESC
+         LIMIT ?`
+      ).bind(...params);
+      const res = await stmt.all<{ github_path: string; match_count: number }>();
+      return (res.results || []).map((r) => ({ github_path: r.github_path, matchCount: Number(r.match_count) }));
+    });
+  }
+
   // FTS5 Search
   async ftsSearch(query: string, limit: number = 20): Promise<Array<{ id: string; title: string; rank: number }>> {
     return withRetry(async () => {
@@ -363,13 +390,17 @@ export class D1Client {
              title=excluded.title, content=excluded.content, content_hash=excluded.content_hash, tags=excluded.tags, updated_at=CURRENT_TIMESTAMP`
           ).bind(c.id, c.githubPath, c.chunkIndex, c.title, c.content, c.contentHash, c.tags)
         );
+        // FTS5 virtual tables do NOT support `ON CONFLICT DO UPDATE` (UPSERT not
+        // implemented for virtual tables). Maintain the index with delete + insert,
+        // binding the FTS rowid to the note_chunks_cache rowid so content resolves.
+        statements.push(
+          this.env.DB.prepare('DELETE FROM note_chunks_fts WHERE id = ?').bind(c.id)
+        );
         statements.push(
           this.env.DB.prepare(
-            `INSERT INTO note_chunks_fts (id, title, content)
-             VALUES (?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-             title=excluded.title, content=excluded.content`
-          ).bind(c.id, c.title || '', c.content)
+            `INSERT INTO note_chunks_fts(rowid, id, title, content)
+             SELECT rowid, ?, ?, ? FROM note_chunks_cache WHERE id = ?`
+          ).bind(c.id, c.title || '', c.content, c.id)
         );
       }
       const BATCH_LIMIT = 50;
@@ -421,11 +452,11 @@ export class D1Client {
     });
   }
 
-  // Inbox Organize: get raw/flushed inbox captures
+  // Inbox Organize: get unprocessed raw/flushed inbox captures only
   async getInboxCaptures(limit: number = 5): Promise<PendingCapture[]> {
     return withRetry(async () => {
       const stmt = this.env.DB.prepare(
-        "SELECT * FROM pending_captures WHERE status IN ('raw','flushed') AND file_path LIKE 'inbox/%' ORDER BY created_at DESC LIMIT ?"
+        "SELECT * FROM pending_captures WHERE status IN ('raw','flushed') AND file_path LIKE 'inbox/%' AND needs_review = 1 ORDER BY created_at DESC LIMIT ?"
       ).bind(limit);
       const res = await stmt.all<PendingCapture>();
       return res.results || [];
@@ -442,8 +473,16 @@ export class D1Client {
   async updateCaptureStatus(id: string, status: string, organizedPath?: string): Promise<void> {
     return withRetry(async () => {
       const stmt = this.env.DB.prepare(
-        'UPDATE pending_captures SET status = ?, organized_path = ? WHERE id = ?'
+        'UPDATE pending_captures SET status = ?, organized_path = ?, needs_review = 0 WHERE id = ?'
       ).bind(status, organizedPath || null, id);
+      await stmt.run();
+    });
+  }
+
+  /** Marks a capture as successfully handled so it leaves the /inbox queue. */
+  async markCaptureProcessed(id: string): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare('UPDATE pending_captures SET needs_review = 0 WHERE id = ?').bind(id);
       await stmt.run();
     });
   }
