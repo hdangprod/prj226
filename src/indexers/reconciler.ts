@@ -63,20 +63,27 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
     }
   }
 
-  if (changedFiles.length === 0) {
-    try {
-      const commitRes = await fetchWithRetry(`${baseUrl}/git/commits/${currentHeadSha}`, { headers });
-      const commitData = (await commitRes.json()) as { tree: { sha: string } };
-      const treeRes = await fetchWithRetry(`${baseUrl}/git/trees/${commitData.tree.sha}?recursive=1`, { headers });
-      const treeData = (await treeRes.json()) as { tree: Array<{ path: string; type: string }> };
-      changedFiles = treeData.tree
-        .filter((n) => n.type === 'blob' && n.path.endsWith('.md'))
-        .map((f) => ({ filename: f.path, status: 'modified' as const }));
-      console.log(JSON.stringify({ event: 'reconciler_full_audit', files: changedFiles.length }));
-    } catch (err) {
-      console.error('[Reconciler Error] Full tree audit failed:', err);
-      return { processed: 0, errors: 1 };
+  // Resolve the current repo tree once (path → blob SHA). This powers both the
+  // per-file content fetch (GitHubReader.fetchBlob requires a blob SHA) and the
+  // full tree audit below.
+  let fileShas = new Map<string, string>();
+  try {
+    const commitRes = await fetchWithRetry(`${baseUrl}/git/commits/${currentHeadSha}`, { headers });
+    const commitData = (await commitRes.json()) as { tree: { sha: string } };
+    const treeRes = await fetchWithRetry(`${baseUrl}/git/trees/${commitData.tree.sha}?recursive=1`, { headers });
+    const treeData = (await treeRes.json()) as { tree: Array<{ path: string; type: string; sha: string }> };
+    for (const node of treeData.tree) {
+      if (node.type === 'blob' && node.path.endsWith('.md')) fileShas.set(node.path, node.sha);
     }
+  } catch (err) {
+    console.error('[Reconciler Error] Failed to resolve repo tree:', err);
+    return { processed: 0, errors: 1 };
+  }
+
+  if (changedFiles.length === 0) {
+    const auditFiles = Array.from(fileShas.keys()).filter((p) => p.endsWith('.md'));
+    changedFiles = auditFiles.map((f) => ({ filename: f, status: 'modified' as const }));
+    console.log(JSON.stringify({ event: 'reconciler_full_audit', files: changedFiles.length }));
   }
 
   let processedCount = 0;
@@ -93,7 +100,13 @@ export async function reconcileVaultIndexCron(env: Env): Promise<{ processed: nu
         }
         await d1.deleteNoteChunksByPath(file.filename);
       } else {
-        const fileContent = await githubReader.fetchFileContent(file.filename);
+        const sha = fileShas.get(file.filename);
+        if (!sha) {
+          console.warn(JSON.stringify({ event: 'reconciler_missing_sha', path: file.filename }));
+          errorCount++;
+          continue;
+        }
+        const fileContent = await githubReader.fetchBlob(sha);
         const chunks = await chunkByHeadings(fileContent, file.filename);
         const existingHashes = await d1.getChunkHashesByPath(file.filename);
         const existingHashMap = new Map(existingHashes.map((h) => [h.id, h.content_hash]));
