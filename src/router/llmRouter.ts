@@ -16,6 +16,29 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type { ZodSchema } from 'zod';
 import type { Env } from '../config';
 
+// ─── Token Usage ─────────────────────────────────────────────────────────────
+
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface StructuredCallOptions {
+  temperature?: number;
+  onUsage?: (usage: TokenUsage) => void;
+}
+
+type ObjectGenerationUsage = Awaited<ReturnType<typeof generateObject>>['usage'];
+
+function toTokenUsage(usage: ObjectGenerationUsage): TokenUsage {
+  return {
+    promptTokens: usage?.inputTokens ?? 0,
+    completionTokens: usage?.outputTokens ?? 0,
+    totalTokens: usage?.totalTokens ?? 0,
+  };
+}
+
 // ─── Retry Config ────────────────────────────────────────────────────────────
 const RETRY_DELAYS_MS = [350, 700, 1400];
 
@@ -99,21 +122,30 @@ export class LLMRouter {
         model: this.fastModel,
         prompt,
         system,
-        maxTokens: 1024,
+        maxOutputTokens: 1024,
       });
       return result.text;
     });
   }
 
   /** Fast model with structured output (Zod schema) */
-  async callFastStructured<T>(prompt: string, schema: ZodSchema<T>, system?: string): Promise<T> {
+  async callFastStructured<T>(
+    prompt: string,
+    schema: ZodSchema<T>,
+    system?: string,
+    options?: StructuredCallOptions,
+  ): Promise<T> {
     return withRetry(async () => {
       const result = await generateObject({
         model: this.fastModel,
         prompt,
         system,
         schema,
+        temperature: options?.temperature,
       });
+      if (options?.onUsage) {
+        options.onUsage(toTokenUsage(result.usage));
+      }
       return result.object;
     });
   }
@@ -125,7 +157,7 @@ export class LLMRouter {
         model: this.proModel,
         prompt,
         system,
-        maxTokens: 2048,
+        maxOutputTokens: 2048,
       });
       return result.text;
     });

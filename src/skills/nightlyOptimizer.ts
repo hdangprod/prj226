@@ -55,8 +55,7 @@ export async function nightlyPromptOptimizer(env: Env): Promise<void> {
   // 4. Generate proposed rules
   let proposedRules: string;
   try {
-    const { data } = await llm.callFast(analysisPrompt, OPTIMIZER_SYSTEM_PROMPT);
-    proposedRules = data;
+    proposedRules = await llm.callFast(analysisPrompt, OPTIMIZER_SYSTEM_PROMPT);
   } catch (err) {
     console.error('[NightlyOptimizer] LLM analysis failed:', err);
     return;

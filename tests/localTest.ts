@@ -16,6 +16,7 @@ import app from '../src/index';
 import { INTENTS } from '../src/governance/intentRouter';
 import { handleKnowledgeSearch } from '../src/skills/knowledgeSearchSkill';
 import { GitHubReader } from '../src/tools/githubClient';
+import { D1Client } from '../src/tools/d1Client';
 import { parseFrontMatter, chunkByHeadings } from '../src/lib/chunking';
 import type { Env } from '../src/config';
 
@@ -192,6 +193,89 @@ Content of section 2 detailing secondary topic details.`;
     console.error('handleKnowledgeSearch failed:', err);
     assert(false, 'handleKnowledgeSearch executes cleanly without throwing TypeError on empty/no-title results');
   }
+
+  // ─── TEST 8: Eval History & Prompt Versioning (Migration 0005 + D1Client helpers) ──
+  const migrationPath5 = path.join(__dirname, '../migrations/0005_eval_history.sql');
+  assert(fs.existsSync(migrationPath5), 'Migration 0005_eval_history.sql exists');
+
+  const migrationSql5 = fs.readFileSync(migrationPath5, 'utf8');
+  assert(migrationSql5.includes('eval_history'), 'Migration creates eval_history table');
+  assert(migrationSql5.includes('eval_iterations'), 'Migration creates eval_iterations table');
+  assert(migrationSql5.includes('prompt_versions'), 'Migration creates prompt_versions table');
+
+  const memStore: Record<string, Array<Record<string, unknown>>> = {
+    eval_history: [],
+    eval_iterations: [],
+    prompt_versions: [],
+  };
+  const memEnv: Env = {
+    ...mockEnv,
+    DB: {
+      prepare: (sql: string) => ({
+        bind: (...params: unknown[]) => {
+          const insertMatch = sql.match(/INSERT INTO (\w+) \(([^)]+)\)/);
+          if (insertMatch) {
+            const table = insertMatch[1];
+            const cols = insertMatch[2].split(',').map((c: string) => c.trim());
+            return {
+              run: async () => {
+                const row: Record<string, unknown> = { created_at: '2026-08-06 00:00:00' };
+                cols.forEach((col, i) => { row[col] = params[i]; });
+                memStore[table].push(row);
+              },
+              first: async () => null,
+              all: async () => ({ results: [] }),
+            };
+          }
+          return {
+            run: async () => {},
+            first: async () => null,
+            all: async () => {
+              if (sql.includes('FROM eval_history')) return { results: memStore.eval_history };
+              if (sql.includes('FROM eval_iterations')) return { results: memStore.eval_iterations };
+              return { results: [] };
+            },
+          };
+        },
+      }),
+    } as any,
+  };
+  const evalD1 = new D1Client(memEnv);
+  const evalId = 'eval-test-1';
+  await evalD1.insertEvalHistory({
+    id: evalId,
+    prompt: 'Generate tasks for research doc',
+    contextHash: 'abc123',
+    finalScore: 0.4,
+    passed: 0,
+    model: 'gemini-3.5-flash-lite',
+    tokensIn: 1200,
+    tokensOut: 400,
+    costUsd: 0.00021,
+  });
+  assert(memStore.eval_history.length === 1, 'insertEvalHistory persists an eval_history row');
+  await evalD1.insertEvalIteration({
+    id: 'eval-iter-1',
+    evalId,
+    iterIndex: 0,
+    draft: '- [ ] Draft item',
+    score: 0.4,
+    criteria: '{"actionable":true}',
+    critique: 'Too generic',
+    worstItemIndex: 0,
+  });
+  assert(memStore.eval_iterations.length === 1, 'insertEvalIteration persists an eval_iterations row');
+  const failedEvals = await evalD1.getFailedEvals(50);
+  assert(failedEvals.length === 1 && failedEvals[0].id === evalId, 'getFailedEvals returns failed evaluations');
+  const iterations = await evalD1.getEvalIterationsByIds([evalId]);
+  assert(iterations.length === 1 && iterations[0].eval_id === evalId, 'getEvalIterationsByIds returns iterations for an eval');
+  await evalD1.insertPromptVersion({
+    id: 'pv-1',
+    version: '2026-08-06',
+    diff: 'RULE_1: Ground tasks in context metrics',
+    status: 'pending',
+  });
+  assert(memStore.prompt_versions.length === 1, 'insertPromptVersion persists a prompt version');
 
   console.log(`\n=== Test Results: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) {

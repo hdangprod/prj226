@@ -52,6 +52,62 @@ export interface NoteChunk {
   updated_at: string;
 }
 
+// Self-Evaluation Reflection Loop (Migration 0005)
+
+export interface EvalHistoryInput {
+  id: string;
+  prompt: string;
+  contextHash: string;
+  finalScore: number;
+  passed: number;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+export interface EvalHistoryRecord {
+  id: string;
+  prompt: string;
+  context_hash: string;
+  final_score: number;
+  passed: number;
+  model: string;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: number;
+  created_at: string;
+}
+
+export interface EvalIterationInput {
+  id: string;
+  evalId: string;
+  iterIndex: number;
+  draft: string;
+  score: number;
+  criteria: string;
+  critique: string;
+  worstItemIndex: number;
+}
+
+export interface EvalIterationRecord {
+  id: string;
+  eval_id: string;
+  iter_index: number;
+  draft: string;
+  score: number;
+  criteria: string;
+  critique: string;
+  worst_item_index: number;
+}
+
+export interface PromptVersionInput {
+  id: string;
+  version: string;
+  diff: string;
+  status: string;
+}
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   let attempt = 0;
   while (attempt < maxRetries) {
@@ -495,6 +551,77 @@ export class D1Client {
       const stmt = this.env.DB.prepare(
         `UPDATE pending_captures SET status = 'flushed' WHERE id IN (${placeholders})`
       ).bind(...ids);
+      await stmt.run();
+    });
+  }
+
+  // Self-Evaluation Reflection Loop (Migration 0005)
+  async insertEvalHistory(entry: EvalHistoryInput): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        `INSERT INTO eval_history (id, prompt, context_hash, final_score, passed, model, tokens_in, tokens_out, cost_usd)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        entry.id,
+        entry.prompt,
+        entry.contextHash,
+        entry.finalScore,
+        entry.passed,
+        entry.model,
+        entry.tokensIn,
+        entry.tokensOut,
+        entry.costUsd
+      );
+      await stmt.run();
+    });
+  }
+
+  async insertEvalIteration(iter: EvalIterationInput): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        `INSERT INTO eval_iterations (id, eval_id, iter_index, draft, score, criteria, critique, worst_item_index)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        iter.id,
+        iter.evalId,
+        iter.iterIndex,
+        iter.draft,
+        iter.score,
+        iter.criteria,
+        iter.critique,
+        iter.worstItemIndex
+      );
+      await stmt.run();
+    });
+  }
+
+  async getFailedEvals(limit: number = 50): Promise<EvalHistoryRecord[]> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        'SELECT * FROM eval_history WHERE passed = 0 ORDER BY created_at DESC LIMIT ?'
+      ).bind(limit);
+      const res = await stmt.all<EvalHistoryRecord>();
+      return res.results || [];
+    });
+  }
+
+  async getEvalIterationsByIds(evalIds: string[]): Promise<EvalIterationRecord[]> {
+    if (evalIds.length === 0) return [];
+    return withRetry(async () => {
+      const placeholders = evalIds.map(() => '?').join(',');
+      const stmt = this.env.DB.prepare(
+        `SELECT * FROM eval_iterations WHERE eval_id IN (${placeholders})`
+      ).bind(...evalIds);
+      const res = await stmt.all<EvalIterationRecord>();
+      return res.results || [];
+    });
+  }
+
+  async insertPromptVersion(version: PromptVersionInput): Promise<void> {
+    return withRetry(async () => {
+      const stmt = this.env.DB.prepare(
+        'INSERT INTO prompt_versions (id, version, diff, status) VALUES (?, ?, ?, ?)'
+      ).bind(version.id, version.version, version.diff, version.status);
       await stmt.run();
     });
   }

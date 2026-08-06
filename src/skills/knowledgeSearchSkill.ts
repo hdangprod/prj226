@@ -90,8 +90,11 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
     console.warn(JSON.stringify({ warning: 'Topic census failed, falling back to top chunks only', error: String(err) }));
   }
 
-  const fileCount = relatedFiles.length > 0 ? relatedFiles.length : orderedChunks.length;
-  const countStr = `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+  // "Best match" = the top ranked semantic chunks actually retrieved.
+  // "Related files" = the whole-picture census of every file that touches the topic.
+  // Reported separately so the user sees the primary answer distinct from the supporting set.
+  const bestMatchCount = orderedChunks.length;
+  const relatedCount = relatedFiles.length;
 
   // Synthesize a cited summary from the top semantic chunks
   const sourceContext = orderedChunks
@@ -102,13 +105,17 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
     .join('\n\n');
 
   const summary = await llm.callPro(
-    `The user asked: "${userText}"\nTopic: "${searchTopic}"\n\nRelevant sources found (${countStr}):\n${sourceContext}\n\nWrite a concise summary (1-2 sentences). Bold key topics using <b>bold text</b>. Reference sources using [1], [2], etc.\n\nCRITICAL RULES:\n- ALWAYS acknowledge the found results explicitly (e.g. "I found ${countStr} for <b>${escapeHtml(searchTopic)}</b> in your wiki.").\n- If the sources contain specific facts, include a brief 1-sentence synthesis of those facts.\n- NEVER say "I have no information", "no details found", or "I currently have no information regarding X" when sources ARE listed!`,
+    `The user asked: "${userText}"\nTopic: "${searchTopic}"\n\nRelevant sources:\n${sourceContext}\n\nWrite a concise summary (1-2 sentences). Bold key topics using <b>bold text</b>. Reference sources using [1], [2], etc.\n\nCRITICAL RULES:\n- Synthesize facts from the sources and reference them with [1], [2], etc.\n- Do NOT restate or invent a file/source count — the system states counts separately.\n- NEVER say "I have no information", "no details found", or "I currently have no information regarding X" when sources ARE listed!`,
   'You are Liam, a precise AI second brain. Always state clearly that results were found in the notes. Never claim no information exists when sources are provided.',
   );
 
   // Deterministic result acknowledgment — independent of LLM compliance, so the
   // user ALWAYS sees the actual result count even if the model denies having any.
-  const ackSentence = `I have found ${countStr} about <b>${escapeHtml(searchTopic)}</b> in your wiki.`;
+  let ackParts = [`I found <b>${bestMatchCount}</b> ${bestMatchCount === 1 ? 'result' : 'results'} matching your prompt`];
+  if (relatedCount > 0) {
+    ackParts.push(`and <b>${relatedCount}</b> related ${relatedCount === 1 ? 'file' : 'files'}`);
+  }
+  const ackSentence = `${ackParts.join(' ')} about <b>${escapeHtml(searchTopic)}</b> in your wiki.`;
 
   // Strip any contradictory "no information / couldn't find / no results" phrasing
   // the model may produce despite results being present, so it cannot override reality.
@@ -162,7 +169,7 @@ export async function handleKnowledgeSearch(ctx: SkillContext): Promise<void> {
     );
     const truncated = relatedFiles.length > shown.length;
     censusBlock =
-      `\n\n📚 <b>Related files (${fileCount}):</b>\n${lines.join('\n')}` +
+      `\n\n📚 <b>Related files (${relatedCount}):</b>\n${lines.join('\n')}` +
       (truncated ? `\n<i>+${relatedFiles.length - shown.length} more</i>` : '');
   }
 

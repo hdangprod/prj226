@@ -180,26 +180,24 @@ export async function generateTaskWithReflection(
       if (i === 0) {
         // First attempt: Generate from scratch
         const generatePrompt = `Task: "${taskName}"\n\nRetrieved context from Second Brain:\n${context}\n\nGenerate a highly actionable To-do list based strictly on the context above.`;
-        const { data, usage } = await llm.callFastStructured(
+        const data = await llm.callFastStructured(
           generatePrompt,
           GeneratedTasksSchema,
           GENERATION_SYSTEM_PROMPT,
-          { temperature },
+          { temperature, onUsage: (usage) => addUsage(totalUsage, usage) },
         );
         draft = data.tasks;
-        addUsage(totalUsage, usage);
       } else {
         // Retry: Refine with critique
         const prevIteration = iterations[iterations.length - 1];
         const refinePrompt = `Task: "${taskName}"\n\nCONTEXT:\n${context}\n\nPREVIOUS DRAFT (rejected):\n${prevIteration.draft.map((t, j) => `${j + 1}. ${t}`).join('\n')}\n\nJUDGE CRITIQUE: ${prevIteration.critique}\nWORST ITEM INDEX: ${prevIteration.worstItemIndex}\n\nFix the flagged weakness FIRST. Keep items that passed. Ground everything in CONTEXT.`;
-        const { data, usage } = await llm.callFastStructured(
+        const data = await llm.callFastStructured(
           refinePrompt,
           GeneratedTasksSchema,
           REFINE_SYSTEM_PROMPT,
-          { temperature },
+          { temperature, onUsage: (usage) => addUsage(totalUsage, usage) },
         );
         draft = data.tasks;
-        addUsage(totalUsage, usage);
       }
     } catch (err) {
       console.warn(`[ReflectionLoop] Generate/Refine failed at iteration ${i}:`, err);
@@ -219,14 +217,13 @@ export async function generateTaskWithReflection(
     let evaluation: JudgeEvaluation;
     try {
       const judgePrompt = `CONTEXT:\n${context}\n\nDRAFT TO-DO LIST:\n${draft.map((t, j) => `${j + 1}. ${t}`).join('\n')}\n\nEvaluate the draft against the context.`;
-      const { data, usage } = await llm.callFastStructured(
+      const data = await llm.callFastStructured(
         judgePrompt,
         JudgeEvaluationSchema,
         JUDGE_SYSTEM_PROMPT,
-        { temperature: 0.3 }, // Low temperature for consistent judging
+        { temperature: 0.3, onUsage: (usage) => addUsage(totalUsage, usage) }, // Low temperature for consistent judging
       );
       evaluation = data;
-      addUsage(totalUsage, usage);
     } catch (err) {
       console.warn(`[ReflectionLoop] Judge failed at iteration ${i}:`, err);
       // If judge fails, accept the draft as-is
