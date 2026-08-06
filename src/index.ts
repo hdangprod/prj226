@@ -8,6 +8,11 @@ import { batchCommitCaptures } from './tools/gitBatchClient';
 
 import { reconcileVaultIndexCron } from './indexers/reconciler';
 
+// Session-Based Workflow (v4.2) Durable Object — wired lazily behind
+// SESSION_FEATURE_ENABLED; exporting the class makes the binding resolvable
+// without changing current behavior.
+export { TelegramSession } from './session/TelegramSession';
+
 const app = new Hono<{ Bindings: Env }>();
 
 // Bot protection middleware

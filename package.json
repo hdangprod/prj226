@@ -9,6 +9,7 @@
     "deploy": "wrangler deploy",
     "test": "npx tsx tests/localTest.ts",
     "test:bot": "npx tsx tests/telegramBotFlows.test.ts",
+    "test:session": "npx tsx tests/session/runAll.ts",
     "evals": "npx tsx evals/run-evals.ts",
     "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit"

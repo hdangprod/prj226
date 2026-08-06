@@ -103,7 +103,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   ├── vaultIndexer.ts            # GitHub Push Webhook handler (edge cache indexer)
     │   └── reconciler.ts              # GitHub webhook reconciliation cron trigger
     ├── sensors/
-    │   └── telegramWebhook.ts         # Telegram webhook receiver (Whisper AI + KV 4s debounce)
+    │   └── telegramWebhook.ts         # Telegram webhook receiver (legacy Whisper+KV debounce; session route gated by SESSION_FEATURE_ENABLED)
     ├── governance/
     │   └── intentRouter.ts            # LLM intent classifier (7 intents + Auto-Capture + HITL)
     ├── tools/
@@ -112,6 +112,24 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     │   ├── gitBatchClient.ts          # GitHub Git Data API batch commit client
     │   ├── githubClient.ts            # GitHub Git Data API blob reader (GitHubReader)
     │   └── telegramClient.ts          # Telegram Bot API client (fetch-native)
+    ├── session/                       # Session-Based Workflow (v4.2, behind SESSION_FEATURE_ENABLED)
+    │   ├── ingress.ts                 # Ingress routing: validate → authorize → scope → DO accept
+    │   ├── conversationScope.ts       # Pure scope derivation (private + group/topic)
+    │   ├── commandParser.ts           # Deterministic lifecycle-command parser
+    │   ├── timeoutPolicy.ts           # Sliding inactivity window + ingress grace
+    │   ├── tokenBudget.ts             # Conservative token estimation & budget decisions
+    │   ├── textChunker.ts             # Telegram response chunker (no silent truncation)
+    │   ├── errorClassifier.ts         # Telegram transport error classification
+    │   ├── secretRedactor.ts          # Secret detection & redaction before external LLM
+    │   ├── sessionConfig.ts           # Env-driven config parse & fail-closed validation
+    │   ├── sessionSchema.ts           # Zod ingress update validation
+    │   ├── featureFlag.ts             # SESSION_FEATURE_ENABLED toggle
+    │   ├── sessionRepository.ts       # Repository contract (rows + methods)
+    │   ├── inMemoryRepository.ts      # Test repository (no Cloudflare runtime)
+    │   ├── sqliteRepository.ts        # SqlStorage repo + SESSION_DDL (dedup, one-active/processing)
+    │   ├── sessionTypes.ts            # Shared session type contracts
+    │   ├── errors.ts                  # Typed TelegramApiError / SessionConfigError
+    │   └── TelegramSession.ts         # Durable Object shell (accept, alarm, fetch)
     ├── skills/                        # 7 PRD skill handlers + nightly optimizer
     │   ├── dailyFocusSkill.ts
     │   ├── taskCaptureSkill.ts

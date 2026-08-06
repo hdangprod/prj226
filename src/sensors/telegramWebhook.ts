@@ -2,7 +2,10 @@ import type { Env } from '../config';
 import { sendChatAction, sendMessage } from '../tools/telegramClient';
 import { handleWorkerPayload } from '../governance/intentRouter';
 import { D1Client } from '../tools/d1Client';
+import { batchCommitCaptures } from '../tools/gitBatchClient';
 import { getLocalDate } from '../lib/dateUtils';
+import { isSessionFeatureEnabled } from '../session/featureFlag';
+import { handleSessionIngress } from '../session/ingress';
 
 export interface TelegramUpdate {
   update_id: number;
@@ -24,6 +27,25 @@ export interface TelegramUpdate {
 }
 
 export async function handleTelegramWebhook(
+  update: TelegramUpdate,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<void> {
+  const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
+  if (!chatId) return;
+
+  // Session-based workflow (v4.2): durable acceptance happens before HTTP 200.
+  // Idempotency is enforced inside the Durable Object SQLite dedup table.
+  if (isSessionFeatureEnabled(env)) {
+    await handleSessionIngress(update, env);
+    return;
+  }
+
+  // Legacy stateless pipeline (unchanged behavior).
+  await handleLegacyIngress(update, env, ctx);
+}
+
+export async function handleLegacyIngress(
   update: TelegramUpdate,
   env: Env,
   ctx: ExecutionContext,

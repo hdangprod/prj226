@@ -15,6 +15,8 @@ export interface Env {
   SESSION_KV: KVNamespace;
   AUDIO_BUCKET?: R2Bucket;
   R2_PUBLIC_DOMAIN?: string;
+  TELEGRAM_SESSIONS?: DurableObjectNamespace;
+  SESSION_ARCHIVE_QUEUE?: Queue<any>;
 
   // ─── Secrets ───
   TELEGRAM_BOT_TOKEN: string;
@@ -37,6 +39,33 @@ export interface Env {
   LLM_FAST_MODEL: string;
   LLM_PRO_PROVIDER: string;
   LLM_PRO_MODEL: string;
+
+  // ─── Session-Based Workflow (v4.2) ───
+  SESSION_FEATURE_ENABLED?: string;
+  TELEGRAM_ALLOWED_USER_IDS?: string;
+  TELEGRAM_ALLOWED_CHAT_IDS?: string;
+  SESSION_INACTIVITY_MINUTES?: string;
+  SESSION_EXPIRY_GRACE_SECONDS?: string;
+  SESSION_DEBOUNCE_MS?: string;
+  SESSION_DEBOUNCE_MAX_WINDOW_MS?: string;
+  SESSION_DEBOUNCE_MAX_FRAGMENTS?: string;
+  SESSION_DEBOUNCE_MAX_CHARS?: string;
+  SESSION_MAX_PENDING_TURNS?: string;
+  SESSION_MAX_PENDING_TEXT_CHARS?: string;
+  SESSION_PROMPT_MAX_INPUT_TOKENS?: string;
+  SESSION_RESERVED_OUTPUT_TOKENS?: string;
+  SESSION_RECENT_TURNS_MAX_TOKENS?: string;
+  SESSION_SUMMARY_MAX_TOKENS?: string;
+  SESSION_RAG_MAX_TOKENS?: string;
+  SESSION_MAX_USER_TURN_TOKENS?: string;
+  SESSION_MAX_INPUT_TOKENS_TOTAL?: string;
+  SESSION_MAX_OUTPUT_TOKENS_TOTAL?: string;
+  SESSION_MAX_LLM_CALLS?: string;
+  SESSION_MAX_TURN_PROCESSING_MS?: string;
+  SESSION_MAX_EVENT_CLOCK_SKEW_MS?: string;
+  SESSION_RAW_RETENTION_HOURS?: string;
+  SESSION_SUMMARY_RETENTION_DAYS?: string;
+  TELEGRAM_PRIVATE_TOPICS_ENABLED?: string;
 }
 
 /** Task schema contract for task capture skill */

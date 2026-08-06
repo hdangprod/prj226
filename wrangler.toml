@@ -32,6 +32,15 @@ crons = [
   "*/5 * * * *"    # Flush pending_captures to GitHub every 5 min
 ]
 
+# ─── Session Durable Objects (v4.2, behind SESSION_FEATURE_ENABLED) ───
+[[durable_objects.bindings]]
+name = "TELEGRAM_SESSIONS"
+class_name = "TelegramSession"
+
+[[migrations]]
+tag = "v1-session-do"
+new_sqlite_classes = ["TelegramSession"]
+
 # ─── Environment Variables (Development: hdangprod_wiki_dev) ───
 [vars]
 GITHUB_OWNER = "hdangprod"
@@ -43,6 +52,7 @@ LLM_FAST_PROVIDER = "openrouter"
 LLM_FAST_MODEL = "google/gemini-3.5-flash-lite"
 LLM_PRO_PROVIDER = "openrouter"
 LLM_PRO_MODEL = "google/gemini-3.5-flash-lite"
+SESSION_FEATURE_ENABLED = "false"
 
 # ─── Secrets (set via `wrangler secret put`) ───
 # TELEGRAM_BOT_TOKEN
@@ -79,6 +89,14 @@ crons = [
   "*/5 * * * *"
 ]
 
+[[env.production.durable_objects.bindings]]
+name = "TELEGRAM_SESSIONS"
+class_name = "TelegramSession"
+
+[[env.production.migrations]]
+tag = "v1-session-do"
+new_sqlite_classes = ["TelegramSession"]
+
 [env.production.vars]
 GITHUB_OWNER = "hdangprod"
 GITHUB_REPO = "hdangprod_wiki_prod"
@@ -89,4 +107,5 @@ LLM_FAST_PROVIDER = "openrouter"
 LLM_FAST_MODEL = "google/gemini-3.5-flash-lite"
 LLM_PRO_PROVIDER = "openrouter"
 LLM_PRO_MODEL = "google/gemini-3.5-flash-lite"
+SESSION_FEATURE_ENABLED = "false"
 
