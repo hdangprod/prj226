@@ -94,7 +94,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     ├── lib/
     │   ├── embeddings.ts              # Workers AI embeddings & SHA-256 content hash
     │   ├── chunking.ts                # Heading-based Markdown chunker & frontmatter parser
-    │   ├── hybridSearch.ts            # RRF (Reciprocal Rank Fusion) hybrid search engine
+    │   ├── hybridSearch.ts            # RRF hybrid search engine (excludes raw inbox/ staging captures)
     │   ├── querySanitizer.ts          # Natural language query keyword extractor & FTS5 sanitizer
     │   ├── reflectionLoop.ts          # Self-Evaluation Generate→Judge→Refine pipeline with token tracking
     │   ├── fetchUtils.ts              # Resilient fetchWithRetry helper
@@ -107,7 +107,7 @@ This sitemap provides a lazy-loading reference index for AI agents and human dev
     ├── governance/
     │   └── intentRouter.ts            # LLM intent classifier (7 intents + Auto-Capture + HITL)
     ├── tools/
-    │   ├── d1Client.ts                # D1 database prepared-statement client
+    │   ├── d1Client.ts                # D1 database prepared-statement client (search census excludes inbox/)
     │   ├── vectorizeClient.ts         # Cloudflare Vectorize client
     │   ├── gitBatchClient.ts          # GitHub Git Data API batch commit client
     │   ├── githubClient.ts            # GitHub Git Data API blob reader (GitHubReader)

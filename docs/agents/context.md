@@ -64,6 +64,9 @@ PRJ226 (Liam v4.1) is an AI-Native Second Brain & Personal OS built on a serverl
 ### `note_chunks_fts` (FTS5 Virtual Table)
 - Synchronized with `note_chunks_cache` via triggers (`chunks_ai`, `chunks_ad`, `chunks_au`) in migration 0002. *(Note: migration 0003 drops these triggers; the indexer and `scripts/seed-dev.sql` maintain FTS5 explicitly.)*
 
+### Knowledge Search Scope (Retrieval Boundary)
+- Hybrid retrieval (`hybridSearch.ts` Vectorize + FTS5) and the topic census (`d1Client.searchRelatedFiles`) **exclude all `inbox/*` paths**. The `inbox/` folder holds raw staging captures (no frontmatter headers, not yet organized); only documents organized into `tasks/`, `wiki/`, `projects/`, etc. with standard OpenWiki YAML headers are returned to the user.
+
 ### `tasks`
 - `id` (TEXT, Primary Key)
 - `name` (TEXT)

@@ -341,7 +341,7 @@ async function main() {
     fixtures.proText = 'Morning Fitness Routine [Source 1].';
     await handleWorkerPayload(textMsg('what do I know about morning fitness'), mockEnv);
     const t = lastText();
-    check(t.includes('I have found 1 file about <b>morning fitness</b> in your wiki.'), 'counts only corroborated result');
+    check(t.includes('I found <b>1</b> result matching your prompt about <b>morning fitness</b> in your wiki.'), 'counts only corroborated result');
     check(t.includes('Morning Fitness Routine'), 'shows the real semantic source');
     check(!t.includes('101649'), 'excludes FTS-only inbox noise not corroborated by Vectorize');
   });
@@ -351,15 +351,40 @@ async function main() {
     fixtures.intent = 'Knowledge_Search';
     fixtures.vectorMatches = [{ id: 'c1', score: 0.94 }];
     fixtures.chunksByIds = [
-      { id: 'c1', github_path: 'inbox/2026-08-05/101529.md', title: null, content: 'PRJ226 notes content.', tags: null, updated_at: '2026-08-05' },
+      { id: 'c1', github_path: 'wiki/projects/prj226-second-brain.md', title: 'PRJ226 Second Brain', content: 'PRJ226 orchestrates an Obsidian vault on the edge stack.', tags: null, updated_at: '2026-08-05' },
     ];
     fixtures.proText = 'I currently have no specific information regarding the contents of PRJ226 [1].';
     await handleWorkerPayload(textMsg('search about PRJ226'), mockEnv);
     const t = lastText();
     check(t.includes('Knowledge Search Results'), 'replies results header');
-    check(t.includes('I have found 1 file about <b>PRJ226</b> in your wiki.'), 'emits deterministic found-ack now showing result count');
+    check(t.includes('I found <b>1</b> result matching your prompt about <b>PRJ226</b> in your wiki.'), 'emits deterministic found-ack now showing best-match count');
     check(!t.includes('have no specific information'), 'strips contradictory "no information" claim');
     check(t.includes('Sources:'), 'still lists the actual source');
+  });
+
+  // 9c. Knowledge Search (unorganized inbox captures must NOT surface)
+  await runScenario('Knowledge_Search: raw inbox captures excluded from results', async () => {
+    fixtures.intent = 'Knowledge_Search';
+    fixtures.vectorMatches = [
+      { id: 'c1', score: 0.9, metadata: { path: 'wiki/projects/prj226-second-brain.md' } },
+      { id: 'c2', score: 0.85, metadata: { path: 'inbox/2026-08-05/101529.md' } },
+    ];
+    fixtures.ftsResults = [{ id: 'c1', title: 'PRJ226 Second Brain', rank: 1 }, { id: 'c2', rank: 2 }];
+    fixtures.chunksByIds = [
+      { id: 'c1', github_path: 'wiki/projects/prj226-second-brain.md', title: 'PRJ226 Second Brain', content: 'PRJ226 orchestrates an Obsidian vault on the edge stack.', tags: null, updated_at: '2026-08-05' },
+      { id: 'c2', github_path: 'inbox/2026-08-05/101529.md', title: null, content: 'PRJ226 notes content.', tags: null, updated_at: '2026-08-05' },
+    ];
+    fixtures.relatedFiles = [
+      { github_path: 'tasks/2026-08-03-prj226-roadmap.md', matchCount: 2 },
+      { github_path: 'wiki/projects/prj226-second-brain.md', matchCount: 1 },
+    ];
+    fixtures.proText = 'PRJ226 orchestrates your second brain on the edge stack [1].';
+    await handleWorkerPayload(textMsg('what do you know about PRJ226'), mockEnv);
+    const t = lastText();
+    check(t.includes('PRJ226 Second Brain'), 'shows the organized wiki source');
+    check(!t.includes('inbox/2026-08-05/101529.md'), 'excludes raw inbox capture from top sources');
+    check(!t.includes('101529'), 'establishes inbox capture id never surfaces');
+    check(t.includes('Related files (2):'), 'census counts only organized documents');
   });
 
   // 9b. Knowledge Search (whole-picture topic census → lists all related files as GitHub links)
@@ -377,7 +402,7 @@ async function main() {
     fixtures.proText = 'PRJ226 orchestrates an Obsidian second brain [1].';
     await handleWorkerPayload(textMsg('what do you know about PRJ226'), mockEnv);
     const t = lastText();
-    check(t.includes('I have found 3 files about <b>PRJ226</b> in your wiki.'), 'ack counts every related file (whole picture)');
+    check(t.includes('I found <b>1</b> result matching your prompt and <b>3</b> related files about <b>PRJ226</b> in your wiki.'), 'ack separates best-match from related-file count (whole picture)');
     check(t.includes('Related files (3):'), 'renders census header with file count');
     check(t.includes('tasks/2026-08-03-prj226-roadmap.md'), 'lists prj226 roadmap task file');
     check(t.includes('tasks/2026-08-03-doing-competitive-research-for-prj226.md'), 'lists competitive-research task file');

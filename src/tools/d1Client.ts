@@ -329,9 +329,10 @@ export class D1Client {
   }
 
   /**
-   * Topic census: every distinct file that mentions the topic (FTS5 content match)
-   * or whose path contains it (e.g. `tasks/2026-08-03-prj226-roadmap.md`). Returns
-   * the "whole picture" of related sources, ranked by how many chunks matched.
+   * Topic census: every distinct NON-inbox file that mentions the topic (FTS5
+   * content match) or whose path contains it (e.g. `tasks/2026-08-03-prj226-roadmap.md`).
+   * Raw `inbox/` staging captures are excluded — only organized documents count.
+   * Returns the "whole picture" of related sources, ranked by how many chunks matched.
    */
   async searchRelatedFiles(topic: string, ftsQuery: string, cap: number = 12): Promise<Array<{ github_path: string; matchCount: number }>> {
     return withRetry(async () => {
@@ -345,7 +346,7 @@ export class D1Client {
       const stmt = this.env.DB.prepare(
         `SELECT github_path, COUNT(*) AS match_count
          FROM note_chunks_cache
-         WHERE github_path LIKE ?${ftsClause}
+         WHERE (github_path LIKE ?${ftsClause}) AND github_path NOT LIKE 'inbox/%'
          GROUP BY github_path
          ORDER BY match_count DESC
          LIMIT ?`

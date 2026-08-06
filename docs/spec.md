@@ -73,12 +73,12 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `llmRouter.ts`: Dynamic model router for fast structured extraction and pro synthesis via Vercel AI SDK (`@ai-sdk/google`), supporting a single unified API key (`GEMINI_API_KEY`, `LLM_FAST_API_KEY`, or `LLM_PRO_API_KEY`) for both models. Auto-retries transient upstream failures (429 rate limits + 5xx overload, e.g. OpenRouter 503) with exponential backoff.
 - `embeddings.ts`: Workers AI `@cf/baai/bge-base-en-v1.5` 768-dim embedding generator + SHA-256 content hash namespacing.
 - `chunking.ts`: Markdown H2 heading chunker.
-- `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3). Accepts a sanitized FTS query separately from the semantic query so keyword hits surface without conversational-noise pollution.
+- `hybridSearch.ts`: RRF (Reciprocal Rank Fusion, K=60) hybrid search across Vectorize ANN (weight 0.7) and D1 FTS5 (weight 0.3). Accepts a sanitized FTS query separately from the semantic query so keyword hits surface without conversational-noise pollution. **Raw `inbox/` staging captures are excluded on both retrieval legs** (Vectorize metadata path filter + FTS5 join on `note_chunks_cache`) so only organized documents surface.
 - `querySanitizer.ts`: Normalizes conversational queries (`"what do you know about PRJ226"` → `PRJ226`) into a clean topic for embedding + an OR-joined FTS5 query.
 - `dateUtils.ts`: Centralized UTC+7 local timezone date formatting.
 
 ### 4. Tool Layer (`src/tools/`)
-- `d1Client.ts`: Cloudflare D1 prepared statement client with exponential backoff & jitter. `bulkUpsertNoteChunksAndFts` maintains the FTS5 index with delete+insert (virtual tables reject `ON CONFLICT DO UPDATE`) binding FTS rowids to `note_chunks_cache` rowids.
+- `d1Client.ts`: Cloudflare D1 prepared statement client with exponential backoff & jitter. `bulkUpsertNoteChunksAndFts` maintains the FTS5 index with delete+insert (virtual tables reject `ON CONFLICT DO UPDATE`) binding FTS rowids to `note_chunks_cache` rowids. `searchRelatedFiles` (topic census) filters out `inbox/` paths so the whole-picture source list only counts organized documents.
 - `vectorizeClient.ts`: Cloudflare Vectorize upsert/delete client (100-item batching).
 - `gitBatchClient.ts`: GitHub Git Data API batch commit engine (flushes `pending_captures` to GitHub in 1 commit) + `deleteGitHubFile`.
 - `githubClient.ts`: GitHub Git Data API blob reader (`GitHubReader`) and OKF document parser.
@@ -92,7 +92,7 @@ Serverless, zero-infrastructure-cost ($0/month 100% Free Tier) AI-Native Second 
 - `dailyFocusSkill.ts`: Synthesizes actionable tasks + working memory for daily focus briefings.
 - `taskCaptureSkill.ts`: Natural language task extraction to D1 `tasks` table + Obsidian deep link button.
 - `rescheduleSkill.ts`: Dependency-aware task rescheduling with conflict warnings.
-- `knowledgeSearchSkill.ts`: Zero GitHub API call hot-path search reading directly from D1 `note_chunks_cache` + Obsidian deep link buttons. Sanitizes the query, then renders a cited summary from top semantic chunks PLUS a whole-picture **topic census** (`searchRelatedFiles`) listing every related file as a verifiable GitHub link.
+- `knowledgeSearchSkill.ts`: Zero GitHub API call hot-path search reading directly from D1 `note_chunks_cache` + Obsidian deep link buttons. Sanitizes the query, then renders a cited summary from top semantic chunks PLUS a whole-picture **topic census** (`searchRelatedFiles`) listing every related file as a verifiable GitHub link. Both the top sources and the census exclude raw `inbox/` captures (unorganized staging notes without frontmatter headers).
 - `rescueModeSkill.ts`: Quick-win task filter (estimate ≤ 0.5h).
 - `sessionHandoffSkill.ts`: Session working memory snapshot recorder.
 - `inboxOrganizeSkill.ts`: 3-phase inbox review and organization workflow (list cards → AI draft with top-5 Vectorize [[WikiLinks]] → commit & index).

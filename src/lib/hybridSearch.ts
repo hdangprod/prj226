@@ -6,6 +6,15 @@ const FTS_WEIGHT = 0.3;
 const VECTOR_TIMEOUT_MS = 8000;
 const FTS_TIMEOUT_MS = 8000;
 
+// Raw staging captures (unorganized inbox notes) are excluded from retrieval.
+// They live under `inbox/` until they're organized into tasks/, wiki/, etc. with
+// proper frontmatter headers — only organized documents should surface in search.
+const INBOX_PREFIX = 'inbox/';
+
+function isInboxPath(path?: string): boolean {
+  return !!path && path.startsWith(INBOX_PREFIX);
+}
+
 export interface HybridSearchResult {
   id: string;
   score: number;
@@ -53,7 +62,11 @@ export async function hybridSearch(
     withTimeout(
       (async () => {
         const stmt = env.DB.prepare(
-          'SELECT id, title, bm25(note_chunks_fts) as rank FROM note_chunks_fts WHERE note_chunks_fts MATCH ? ORDER BY rank LIMIT 20'
+          `SELECT c.id, c.title, bm25(note_chunks_fts) as rank
+           FROM note_chunks_fts
+           JOIN note_chunks_cache c ON c.id = note_chunks_fts.id
+           WHERE note_chunks_fts MATCH ? AND c.github_path NOT LIKE 'inbox/%'
+           ORDER BY rank LIMIT 20`
         ).bind(ftsMatch);
         const res = await stmt.all<{ id: string; title: string; rank: number }>();
         return res.results || [];
@@ -64,7 +77,9 @@ export async function hybridSearch(
   ]);
 
   if (vectorRes.status === 'fulfilled') {
-    vectorResults = vectorRes.value.matches.map((m) => ({ id: m.id, score: m.score }));
+    vectorResults = vectorRes.value.matches
+      .filter((m) => !isInboxPath((m.metadata as { path?: string } | undefined)?.path))
+      .map((m) => ({ id: m.id, score: m.score }));
   } else {
     console.warn(JSON.stringify({ warning: 'Vectorize query failed, falling back to FTS5', error: vectorRes.reason }));
   }
